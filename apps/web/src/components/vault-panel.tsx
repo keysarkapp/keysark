@@ -509,18 +509,8 @@ export function VaultPanel({
     <div className="grid h-screen grid-cols-[20rem_1fr] overflow-hidden">
       {/* 条目列(含品牌 / 当前保险库 / 锁定) */}
       <section className="flex flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div className="flex h-14 items-center justify-between gap-2 border-b border-[var(--color-border)] px-4">
+        <div className="flex h-14 items-center border-b border-[var(--color-border)] px-4">
           <Wordmark className="text-base" />
-          {pending > 0 ? (
-            <Button variant="secondary" size="sm" onClick={syncNow} disabled={busy}>
-              {t("btn_sync")} · {t("pending_count", pending)}
-            </Button>
-          ) : (
-            <span className="flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
-              {t("synced")}
-            </span>
-          )}
         </div>
         {/* 默认库不显示名称(顶部已有 KeysArk 字标);具名库才显示名称 */}
         {!currentIsDefault ? (
@@ -597,66 +587,60 @@ export function VaultPanel({
 
       {/* 详情 / 编辑 */}
       <section className="flex flex-col bg-[var(--color-background)]">
-        {/* 右上角:语言/主题切换在头像左侧 */}
+        {/* 头部:左侧为同步状态,右侧语言/主题切换在头像左侧 */}
         <div className="flex h-14 items-center justify-between gap-3 border-b border-[var(--color-border)] px-6">
-          <span className="truncate text-sm font-semibold">
-            {selected
-              ? selected.title || t("untitled")
-              : mode === "edit"
-                ? t("detail_new")
-                : ""}
-          </span>
+          <div className="flex min-w-0 items-center gap-3">
+            {pending > 0 ? (
+              <Button variant="secondary" size="sm" onClick={syncNow} disabled={busy}>
+                {t("btn_sync")} · {t("pending_count", pending)}
+              </Button>
+            ) : (
+              <span className="flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
+                {t("synced")}
+              </span>
+            )}
+            <StatusLine status={status} inline />
+          </div>
           <div className="flex items-center gap-3">
             <HeaderControls />
             <UserMenu name={user.name} avatar={user.avatar} onLock={lock} />
           </div>
         </div>
         {mode === "edit" ? (
-          // ---- 编辑模式:可编辑标题 + 内容 ----
+          // ---- 编辑模式:标题输入与 保存/取消 同一行,内容在下 ----
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-[var(--color-muted-foreground)]">
-                {t("field_title")}
-              </span>
+            <div className="flex items-center gap-3">
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder={t("field_title_ph")}
+                className="min-w-0 flex-1"
               />
-            </label>
-            <label className="flex min-h-0 flex-1 flex-col gap-1.5">
-              <span className="text-xs font-medium text-[var(--color-muted-foreground)]">
-                {t("field_content")}
-              </span>
-              <Textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder={t("content_ph")}
-                className="min-h-[18rem] flex-1 resize-none font-mono leading-relaxed"
-              />
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={save} disabled={busy}>
+              <Button size="sm" onClick={save} disabled={busy}>
                 {t("btn_save")}
               </Button>
-              <Button variant="outline" onClick={cancelEdit} disabled={busy}>
+              <Button size="sm" variant="outline" onClick={cancelEdit} disabled={busy}>
                 {t("btn_cancel")}
               </Button>
-              <div className="ml-auto flex items-center gap-3">
-                <StatusLine status={status} inline />
-              </div>
             </div>
+            <Textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder={t("content_ph")}
+              className="min-h-[18rem] flex-1 resize-none font-mono leading-relaxed"
+            />
           </div>
         ) : selectedId ? (
           // ---- 预览模式:只读 ----
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <h2 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight">
+                {selected ? selected.title || t("untitled") : t("untitled")}
+              </h2>
               <Button size="sm" onClick={editEntry} disabled={busy}>
                 {t("btn_edit")}
               </Button>
-              <div className="ml-auto">
-                <StatusLine status={status} inline />
-              </div>
             </div>
             <article className="flex-1 whitespace-pre-wrap break-words rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 font-mono text-sm leading-relaxed">
               {content ? (
