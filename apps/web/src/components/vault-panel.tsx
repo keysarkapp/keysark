@@ -50,7 +50,7 @@ import { useT } from "./providers";
 import { Vault, itemRelPath, type EntryMeta, type FolderMeta } from "@/lib/vault";
 import { saveKey, loadKey, deleteKey } from "@/lib/key-store";
 import { testId } from "@/lib/test-id";
-import type { StorageLocation } from "@/lib/storage";
+import type { StorageProvider } from "@/lib/storage";
 import {
   b64decode,
   b64encode,
@@ -70,9 +70,13 @@ type Phase = "select" | "unlock" | "create" | "unlocked";
 export function VaultPanel({
   vaults: initialVaults,
   user,
+  provider,
+  storageRoot,
 }: {
   vaults: VaultDescriptor[];
   user: VaultUser;
+  provider: StorageProvider;
+  storageRoot: string;
 }) {
   const t = useT();
   // 默认库:无名或 label 为 "default"(创建首个库时的占位)。一律不显示 "default" 字样。
@@ -133,8 +137,6 @@ export function VaultPanel({
   const [pending, setPending] = useState(0);
   // 详情区两种模式:打开已有条目为只读 preview;新建/点击编辑进入 edit。
   const [mode, setMode] = useState<"preview" | "edit">("preview");
-  // 当前条目在网盘里的位置(预览态下方展示)
-  const [location, setLocation] = useState<StorageLocation | null>(null);
   // 编辑态的所属文件夹
   const [editFolderId, setEditFolderId] = useState<string | null>(null);
 
@@ -156,27 +158,22 @@ export function VaultPanel({
     return entries.filter((e) => (e.title || "").toLowerCase().includes(q));
   }, [entries, query]);
 
-  // 预览某条目时,查询它在网盘里的位置 / 访问链接(只读元数据,不涉及内容)。
-  useEffect(() => {
-    if (mode !== "preview" || !selectedId || !selectedVault) {
-      setLocation(null);
-      return;
+  // 「在网盘中打开」链接:由相对路径直接拼出(不查网盘,无延时)。
+  // 百度 → 文件所在文件夹的网页深链;Google 可见文件夹 → 按文件名搜索;Google appDataFolder 隐藏 → 无可打开链接。
+  function netdiskUrl(relPath: string): string | null {
+    const clean = relPath.replace(/^\/+/, "");
+    if (provider === "baidu") {
+      const abs = `${storageRoot}/${clean}`;
+      const folderAbs = abs.slice(0, abs.lastIndexOf("/")) || "/";
+      return `https://pan.baidu.com/disk/main#/index?category=all&path=${encodeURIComponent(folderAbs)}`;
     }
-    let alive = true;
-    const relPath = itemRelPath(selectedVault.dir, selectedId);
-    setLocation(null);
-    fetch(`/api/files/locate?path=${encodeURIComponent(relPath)}`)
-      .then((res) => (res.ok ? (res.json() as Promise<StorageLocation>) : null))
-      .then((loc) => {
-        if (alive && loc && !("error" in loc)) setLocation(loc);
-      })
-      .catch(() => {
-        /* 定位失败不影响阅读;静默 */
-      });
-    return () => {
-      alive = false;
-    };
-  }, [mode, selectedId, selectedVault]);
+    if (provider === "google") {
+      if (storageRoot === "appDataFolder") return null; // 隐藏沙盒,网页端打不开
+      const name = clean.slice(clean.lastIndexOf("/") + 1);
+      return `https://drive.google.com/drive/search?q=${encodeURIComponent(name)}`;
+    }
+    return null;
+  }
 
   // 进入解锁界面时:探测本设备是否记住了该库密钥。记住且校验通过 →
   // 新鲜加载(未被手动锁定抑制)直接自动解锁;否则只点亮「用本设备解锁」按钮。
@@ -1240,15 +1237,18 @@ export function VaultPanel({
                         {t("last_edited", new Date(selected.updatedAt).toLocaleString())}
                       </span>
                     </span>
-                    {location?.url ? (
+                    {selectedVault && netdiskUrl(itemRelPath(selectedVault.dir, selected.id)) ? (
                       <a
-                        href={location.url}
+                        href={netdiskUrl(itemRelPath(selectedVault.dir, selected.id))!}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex shrink-0 items-center gap-1 text-[var(--color-primary)] hover:underline"
                       >
                         <ExternalLink className="h-3 w-3" />
-                        {t("open_in_netdisk")}
+                        {t(
+                          "open_in_netdisk",
+                          t(provider === "google" ? "provider_google" : "provider_baidu"),
+                        )}
                       </a>
                     ) : null}
                   </div>

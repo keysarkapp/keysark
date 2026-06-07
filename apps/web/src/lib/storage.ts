@@ -23,19 +23,12 @@ export interface StorageClient {
   upload(path: string, bytes: Uint8Array): Promise<void>;
   /** 按文件 id 下载原始字节。 */
   download(fileId: string): Promise<Uint8Array>;
-  /** 定位某相对路径文件在网盘里的位置:绝对路径 + 可点击访问链接(若可得)。 */
-  locate(relPath: string): Promise<StorageLocation>;
-}
-export interface StorageLocation {
-  provider: StorageProvider;
-  /** 在对应网盘里的展示路径 */
-  path: string;
-  /** 在网盘网页端打开的链接(百度为所在文件夹,Google 为该文件;不可得为 null) */
-  url: string | null;
 }
 export interface ConnectedStorage {
   provider: StorageProvider;
   accountKey: string;
+  /** 存储根的展示前缀(百度沙盒绝对路径 / Google 的 displayRoot)。用于客户端直接拼「打开链接」。 */
+  root: string;
   client: StorageClient;
 }
 
@@ -47,6 +40,7 @@ export async function getConnectedStorage(): Promise<ConnectedStorage | null> {
     return {
       provider: "google",
       accountKey: google.sub,
+      root: c.displayRoot,
       client: {
         async userInfo() {
           const i = await c.userInfo();
@@ -55,14 +49,6 @@ export async function getConnectedStorage(): Promise<ConnectedStorage | null> {
         list: (dir) => c.list(dir),
         upload: (path, bytes) => c.upload(path, bytes),
         download: (id) => c.download(id),
-        async locate(relPath) {
-          const loc = await c.locate(relPath);
-          return {
-            provider: "google",
-            path: `${c.displayRoot}/${relPath.replace(/^\/+/, "")}`,
-            url: loc?.webViewLink ?? null,
-          };
-        },
       },
     };
   }
@@ -73,6 +59,7 @@ export async function getConnectedStorage(): Promise<ConnectedStorage | null> {
     return {
       provider: "baidu",
       accountKey: baidu.uk,
+      root: c.root,
       client: {
         async userInfo() {
           const i = await c.userInfo();
@@ -88,13 +75,6 @@ export async function getConnectedStorage(): Promise<ConnectedStorage | null> {
           await c.upload(path, bytes, 3);
         },
         download: (id) => c.download(Number(id)),
-        async locate(relPath) {
-          const abs = `${c.root}/${relPath.replace(/^\/+/, "")}`;
-          const folderAbs = abs.slice(0, abs.lastIndexOf("/")) || "/";
-          // 百度网盘无法深链到具体文件,链接指向所在文件夹(网页端)。
-          const url = `https://pan.baidu.com/disk/main#/index?category=all&path=${encodeURIComponent(folderAbs)}`;
-          return { provider: "baidu", path: abs, url };
-        },
       },
     };
   }

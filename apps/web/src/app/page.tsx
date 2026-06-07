@@ -70,5 +70,7 @@ export default async function Home({
     }
   }
 
-  return <VaultPanel vaults={vaults} user={user} />;
+  return (
+    <VaultPanel vaults={vaults} user={user} provider={conn.provider} storageRoot={conn.root} />
+  );
 }
