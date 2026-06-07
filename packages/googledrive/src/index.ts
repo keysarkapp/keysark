@@ -9,4 +9,8 @@ export {
   type TokenResponse,
   type GoogleUserInfo,
 } from "./oauth";
-export { GoogleDriveClient, type DriveFile, type DriveOptions } from "./client";
+export {
+  GoogleDriveClient,
+  type DriveFile,
+  type DriveOptions,
+} from "./client";

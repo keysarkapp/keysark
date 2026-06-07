@@ -8,8 +8,10 @@ const USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
 // drive.appdata:仅应用专属隐藏文件夹(appDataFolder)的读写,与百度沙盒同等隔离,用户在 Drive 里看不到。
 // drive.file  :应用在 My Drive 里创建/打开的文件(可见),用于「根目录可见文件夹」模式;仍只能碰本应用创建的文件。
 const IDENTITY = "openid email profile";
-const SCOPE_APPDATA = `${IDENTITY} https://www.googleapis.com/auth/drive.appdata`;
-const SCOPE_FILE = `${IDENTITY} https://www.googleapis.com/auth/drive.file`;
+const APPDATA = "https://www.googleapis.com/auth/drive.appdata";
+const FILE = "https://www.googleapis.com/auth/drive.file";
+const SCOPE_APPDATA = `${IDENTITY} ${APPDATA}`;
+const SCOPE_FILE = `${IDENTITY} ${FILE}`;
 
 /** 默认 scope(appDataFolder 隐藏沙盒)。 */
 export const DEFAULT_SCOPE = SCOPE_APPDATA;
