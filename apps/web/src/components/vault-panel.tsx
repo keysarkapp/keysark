@@ -49,6 +49,7 @@ import { UserMenu } from "./user-menu";
 import { useT } from "./providers";
 import { Vault, itemRelPath, type EntryMeta, type FolderMeta } from "@/lib/vault";
 import { saveKey, loadKey, deleteKey } from "@/lib/key-store";
+import { testId } from "@/lib/test-id";
 import type { StorageLocation } from "@/lib/storage";
 import {
   b64decode,
@@ -610,7 +611,7 @@ export function VaultPanel({
   if (phase === "select") {
     return (
       <CenteredShell user={user}>
-        <Card className="w-full">
+        <Card {...testId("vault-select")} className="w-full">
           <CardHeader>
             <CardTitle>{t("select_title")}</CardTitle>
             <CardDescription>{t("select_desc")}</CardDescription>
@@ -654,7 +655,7 @@ export function VaultPanel({
   if (phase === "create") {
     return (
       <CenteredShell user={user}>
-        <Card className="w-full">
+        <Card {...testId("vault-create")} className="w-full">
           <CardHeader>
             <CardTitle>{t("create_title")}</CardTitle>
             <CardDescription>
@@ -756,7 +757,7 @@ export function VaultPanel({
   if (phase === "unlock") {
     return (
       <CenteredShell user={user}>
-        <Card className="w-full">
+        <Card {...testId("vault-unlock")} className="w-full">
           <CardHeader>
             <CardTitle>{t("unlock_title")}</CardTitle>
             <CardDescription>
@@ -825,6 +826,20 @@ export function VaultPanel({
     entries
       .filter((e) => e.folderId === parentId)
       .sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+
+  // 条目的文件夹路径面包屑(根 → "全部条目")。
+  function folderPathOf(folderId: string | null): string {
+    const byId = new Map(folders.map((f) => [f.id, f]));
+    const parts: string[] = [];
+    let cur: string | null = folderId;
+    while (cur) {
+      const f = byId.get(cur);
+      if (!f) break;
+      parts.unshift(f.name || t("new_folder"));
+      cur = f.parentId;
+    }
+    return parts.length ? parts.join(" / ") : t("all_items");
+  }
 
   // 单个条目(树叶):点击在右侧详情打开;左侧句柄可拖动到文件夹。
   function itemRow(e: EntryMeta, depth: number): React.ReactNode {
@@ -993,11 +1008,23 @@ export function VaultPanel({
     return rows;
   }
 
+  // 条目图标:首字母 + 紫色渐变圆角方块(对齐 1Password 的条目头像)。
+  function itemIcon(text: string) {
+    const ch = (text || "").trim().slice(0, 1).toUpperCase() || "·";
+    return (
+      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--color-primary)] to-[oklch(0.55_0.21_292)] text-2xl font-semibold text-[var(--color-primary-foreground)] shadow-sm">
+        {ch}
+      </span>
+    );
+  }
+
+  const previewName = selected?.title || t("untitled");
+
   return (
-    <div className="grid h-screen grid-cols-[20rem_1fr] overflow-hidden">
+    <div {...testId("vault-workbench")} className="grid h-screen grid-cols-[20rem_1fr] overflow-hidden">
       {/* 导航:文件夹 + 条目 合并的目录树 */}
-      <aside className="flex flex-col border-r border-[var(--color-border)] bg-[var(--color-surface-2)]">
-        <div className="flex h-14 items-center justify-between gap-2 border-b border-[var(--color-border)] px-4">
+      <aside {...testId("vault-nav")} className="flex flex-col border-r border-[var(--color-border)] bg-[var(--color-surface-2)]">
+        <div {...testId("vault-nav-header")} className="flex h-14 items-center justify-between gap-2 border-b border-[var(--color-border)] px-4">
           <Wordmark className="text-base" />
           {/* 分体按钮:主体直接新建条目,右侧三角下拉提供「新建文件夹」 */}
           <div className="flex items-center">
@@ -1031,7 +1058,7 @@ export function VaultPanel({
             </DropdownMenu>
           </div>
         </div>
-        <div className="border-b border-[var(--color-border)] p-2">
+        <div {...testId("vault-nav-search")} className="border-b border-[var(--color-border)] p-2">
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -1039,7 +1066,7 @@ export function VaultPanel({
             className="h-9"
           />
         </div>
-        <div className="flex-1 overflow-y-auto p-2">
+        <div {...testId("vault-tree")} className="flex-1 overflow-y-auto p-2">
           {/* 全部条目(根),也是「移到根目录」的放置目标 */}
           <button
             type="button"
@@ -1073,7 +1100,7 @@ export function VaultPanel({
             </span>
           </button>
 
-          <div className="mt-1 flex flex-col">
+          <div {...testId("vault-tree-list")} className="mt-1 flex flex-col">
             {loadingEntries ? (
               <p className="px-3 py-8 text-center text-sm text-[var(--color-muted-foreground)]">
                 {t("loading_entries")}
@@ -1097,101 +1124,144 @@ export function VaultPanel({
         </div>
       </aside>
 
-      {/* 详情 / 编辑 */}
-      <section className="flex flex-col bg-[var(--color-background)]">
-        {/* 头部:左侧为同步状态,右侧语言/主题切换在头像左侧 */}
-        <div className="flex h-14 items-center justify-between gap-3 border-b border-[var(--color-border)] px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            {pending > 0 ? (
-              <Button variant="secondary" size="sm" onClick={syncNow} disabled={busy}>
-                {t("btn_sync")} · {t("pending_count", pending)}
-              </Button>
-            ) : (
-              <span className="flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
-                {t("synced")}
-              </span>
-            )}
-            <StatusLine status={status} inline />
-          </div>
-          <div className="flex items-center gap-3">
-            <HeaderControls />
-            <UserMenu
-              name={user.name}
-              avatar={user.avatar}
-              onLock={lock}
-              onForget={enteredRemembered ? forgetDevice : undefined}
-            />
-          </div>
-        </div>
-        {mode === "edit" ? (
-          // ---- 编辑模式:标题输入与 保存/取消 同一行,内容在下 ----
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
-            <div className="flex items-center gap-3">
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={t("field_title_ph")}
-                className="min-w-0 flex-1"
-              />
-              <Button size="sm" onClick={save} disabled={busy}>
-                {t("btn_save")}
-              </Button>
-              <Button size="sm" variant="outline" onClick={cancelEdit} disabled={busy}>
-                {t("btn_cancel")}
-              </Button>
-            </div>
-            <Textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder={t("content_ph")}
-              className="min-h-[18rem] flex-1 resize-none font-mono leading-relaxed"
-            />
-          </div>
-        ) : selectedId ? (
-          // ---- 预览模式:只读 ----
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
-            <div className="flex items-center gap-3">
-              <h2 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight">
-                {selected ? selected.title || t("untitled") : t("untitled")}
-              </h2>
-              <Button size="sm" onClick={editEntry} disabled={busy}>
-                {t("btn_edit")}
-              </Button>
-            </div>
-            <article className="flex-1 whitespace-pre-wrap break-words rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 font-mono text-sm leading-relaxed">
-              {content ? (
-                content
+      {/* 详情 / 编辑(布局对齐 1Password) */}
+      <section {...testId("vault-detail")} className="flex flex-col bg-[var(--color-surface-2)]">
+        <div {...testId("vault-detail-scroll")} className="flex-1 overflow-y-auto">
+          {/* 顶栏:同步状态 + 控件 + 用户菜单(编辑/预览共用) */}
+          <div {...testId("vault-detail-header")} className="flex h-14 items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-background)] px-6">
+            <div className="flex min-w-0 items-center gap-3">
+              {pending > 0 ? (
+                <Button variant="secondary" size="sm" onClick={syncNow} disabled={busy}>
+                  {t("btn_sync")} · {t("pending_count", pending)}
+                </Button>
               ) : (
-                <span className="text-[var(--color-muted-foreground)]">{t("content_empty")}</span>
-              )}
-            </article>
-            {location ? (
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-[var(--color-border)] pt-3 text-xs text-[var(--color-muted-foreground)]">
-                <span className="shrink-0">
-                  {t("stored_at", t(location.provider === "google" ? "provider_google" : "provider_baidu"))}
+                <span className="flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
+                  {t("synced")}
                 </span>
-                <code className="min-w-0 break-all text-[var(--color-foreground)]">{location.path}</code>
-                {location.url ? (
-                  <a
-                    href={location.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex shrink-0 items-center gap-1 text-[var(--color-primary)] hover:underline"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    {t("open_in_netdisk")}
-                  </a>
+              )}
+              <StatusLine status={status} inline />
+            </div>
+            <div className="flex items-center gap-2.5">
+              <HeaderControls />
+              <UserMenu
+                name={user.name}
+                avatar={user.avatar}
+                onLock={lock}
+                onForget={enteredRemembered ? forgetDevice : undefined}
+              />
+            </div>
+          </div>
+
+          {mode === "edit" ? (
+            // ---- 编辑模式:满宽条目头(文件夹路径 + 取消/保存)+ 居中正文 ----
+            <div {...testId("vault-item-edit")} className="w-full">
+              <div
+                {...testId("vault-item-edit-header")}
+                className="flex items-center justify-between gap-3 px-6 py-3"
+                style={{
+                  backgroundImage:
+                    "repeating-linear-gradient(45deg, color-mix(in oklch, var(--color-primary) 14%, transparent) 0, color-mix(in oklch, var(--color-primary) 14%, transparent) 10px, color-mix(in oklch, var(--color-primary) 5%, transparent) 10px, color-mix(in oklch, var(--color-primary) 5%, transparent) 20px)",
+                }}
+              >
+                <div className="flex min-w-0 items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
+                  <Folder className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{folderPathOf(editFolderId)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={cancelEdit} disabled={busy}>
+                    {t("btn_cancel")}
+                  </Button>
+                  <Button size="sm" onClick={save} disabled={busy}>
+                    {t("btn_save")}
+                  </Button>
+                </div>
+              </div>
+              <div {...testId("vault-item-edit-body")} className="mx-auto w-full max-w-[640px] px-6 py-8">
+                <div {...testId("vault-item-header")} className="mb-6 flex items-center gap-4">
+                  {itemIcon(title)}
+                  <Input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder={t("field_title_ph")}
+                    className="h-12 min-w-0 flex-1 text-lg font-semibold"
+                  />
+                </div>
+                <div {...testId("vault-item-content-card")} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 shadow-sm">
+                  <label className="block text-xs font-medium text-[var(--color-primary)]">
+                    {t("field_content")}
+                  </label>
+                  <Textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder={t("content_ph")}
+                    className="mt-1 min-h-[18rem] resize-none border-0 bg-transparent p-0 text-sm leading-relaxed shadow-none focus-visible:ring-0"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : selectedId ? (
+            // ---- 预览模式:满宽条目头(文件夹路径 + 编辑)+ 居中正文 ----
+            <div {...testId("vault-item-preview")} className="w-full">
+              <div
+                {...testId("vault-item-preview-header")}
+                className="flex items-center justify-between gap-3 px-6 py-3"
+              >
+                <div className="flex min-w-0 items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
+                  <Folder className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{folderPathOf(selected?.folderId ?? null)}</span>
+                </div>
+                <Button size="sm" variant="secondary" onClick={editEntry} disabled={busy}>
+                  <Pencil className="h-3.5 w-3.5" />
+                  {t("btn_edit")}
+                </Button>
+              </div>
+              <div {...testId("vault-item-preview-body")} className="mx-auto w-full max-w-[640px] px-6 py-8">
+                <div {...testId("vault-item-header")} className="mb-6 flex items-center gap-4">
+                  {itemIcon(previewName)}
+                  <h2 className="min-w-0 flex-1 truncate text-2xl font-bold tracking-tight">
+                    {previewName}
+                  </h2>
+                </div>
+                <div {...testId("vault-item-content-card")} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-accent)] px-4 py-3">
+                  <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                    {content ? (
+                      content
+                    ) : (
+                      <span className="text-[var(--color-muted-foreground)]">{t("content_empty")}</span>
+                    )}
+                  </div>
+                </div>
+                {selected ? (
+                  <div className="mt-6 flex items-center justify-between gap-3 px-1 text-xs text-[var(--color-muted-foreground)]">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">
+                        {t("last_edited", new Date(selected.updatedAt).toLocaleString())}
+                      </span>
+                    </span>
+                    {location?.url ? (
+                      <a
+                        href={location.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex shrink-0 items-center gap-1 text-[var(--color-primary)] hover:underline"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        {t("open_in_netdisk")}
+                      </a>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
-            ) : null}
-          </div>
-        ) : (
-          // ---- 无选中:空态 ----
-          <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-[var(--color-muted-foreground)]">
-            {t("preview_empty")}
-          </div>
-        )}
+            </div>
+          ) : (
+            // ---- 无选中:空态 ----
+            <div {...testId("vault-item-empty")} className="flex min-h-[50vh] items-center justify-center p-6 text-center text-sm text-[var(--color-muted-foreground)]">
+              {t("preview_empty")}
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );
@@ -1200,16 +1270,16 @@ export function VaultPanel({
 // 居中外壳:选择/解锁/创建页用,顶栏带品牌 + 语言/主题切换 + 用户菜单。
 function CenteredShell({ children, user }: { children: React.ReactNode; user: VaultUser }) {
   return (
-    <main className="relative flex min-h-screen flex-col bg-[var(--color-background)]">
+    <main {...testId("vault-shell")} className="relative flex min-h-screen flex-col bg-[var(--color-background)]">
       <div className="hero-aurora" aria-hidden="true" />
-      <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-6 py-5">
+      <header {...testId("vault-shell-header")} className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-6 py-5">
         <Wordmark className="text-lg" />
         <div className="flex items-center gap-3">
           <HeaderControls />
           <UserMenu name={user.name} avatar={user.avatar} />
         </div>
       </header>
-      <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-8 px-4 pb-16">
+      <div {...testId("vault-shell-body")} className="relative z-10 flex flex-1 flex-col items-center justify-center gap-8 px-4 pb-16">
         <div className="w-full max-w-md">{children}</div>
       </div>
     </main>

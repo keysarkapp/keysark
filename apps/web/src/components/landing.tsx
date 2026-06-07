@@ -6,6 +6,7 @@ import { Logo, Wordmark } from "./brand";
 import { HeaderControls } from "./controls";
 import { useT } from "./providers";
 import type { MsgKey } from "@/lib/i18n";
+import { testId } from "@/lib/test-id";
 
 const FEATURES: { title: MsgKey; body: MsgKey }[] = [
   { title: "feat_1_title", body: "feat_1_body" },
@@ -24,14 +25,14 @@ export function Landing({ error }: { error?: string }) {
     : null;
 
   return (
-    <div className="relative flex min-h-screen flex-col">
+    <div {...testId("landing")} className="relative flex min-h-screen flex-col">
       {/* 背景层 */}
       <div className="hero-aurora" aria-hidden="true" />
       <div className="hero-grid" aria-hidden="true" />
 
       <div className="relative z-10 flex min-h-screen flex-col">
         {/* 顶栏 */}
-        <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
+        <header {...testId("landing-header")} className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
           <Wordmark className="text-lg" />
           <div className="flex items-center gap-3">
             <HeaderControls />
@@ -49,7 +50,7 @@ export function Landing({ error }: { error?: string }) {
         </header>
 
         {/* Hero */}
-        <section className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-6 py-20 text-center">
+        <section {...testId("landing-hero")} className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-6 py-20 text-center">
           <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/80 px-4 py-1.5 text-xs font-medium text-[var(--color-muted-foreground)] shadow-sm backdrop-blur">
             <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
             {t("hero_badge")}
@@ -85,6 +86,7 @@ export function Landing({ error }: { error?: string }) {
         {/* 三特性 */}
         <section
           id="how"
+          {...testId("landing-features")}
           className="border-t border-[var(--color-border)] bg-[var(--color-surface-2)]/70 backdrop-blur"
         >
           <div className="mx-auto grid w-full max-w-6xl gap-6 px-6 py-16 sm:grid-cols-3">
@@ -104,7 +106,7 @@ export function Landing({ error }: { error?: string }) {
         </section>
 
         {/* 页脚 */}
-        <footer className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-8 text-xs text-[var(--color-muted-foreground)]">
+        <footer {...testId("landing-footer")} className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-8 text-xs text-[var(--color-muted-foreground)]">
           <Wordmark className="text-sm font-medium" />
           <span>{t("footer_tagline")}</span>
         </footer>

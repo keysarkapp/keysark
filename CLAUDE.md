@@ -28,6 +28,13 @@ pnpm monorepo. Workspaces: `apps/*`, `packages/*`。
 - 服务端 API 只搬运**不透明 base64 密文**;`@keysark/baidupan` 与 `@keysark/googledrive` 字节进字节出,内容无关。
 - 助记词 = BIP39 **12 词 + 英文词表**(对齐 MetaMask)。AES-256-GCM,IV 每次随机 96-bit、绝不复用。
 
+### 4. 所有布局容器必须带固定 `data-testid`
+
+- 每个**布局容器**(页面级 / 区域级的 `div`/`section`/`aside`/`main`/`header`/`footer`、卡片、面板、滚动区等结构性元素)都要有一个**固定、语义化、kebab-case、跨重构稳定**的 `data-testid`。
+- 唯一注入方式:`@/lib/test-id` 的 `testId()` —— `<div {...testId("vault-workbench")} />`。禁止手写裸 `data-testid={...}`,禁止用拼接 / 随机 / 索引生成的不稳定值。
+- 由环境变量 `NEXT_PUBLIC_TEST_IDS` 总开关控制(`1`/`true` 开,留空/`0`/`false` 关);生产默认关闭,关闭时不渲染任何 `data-testid`。改动该变量需重启 dev。
+- 新增布局容器时一并补 `testId`;命名约定:页面/大区用 `<scope>`(如 `landing`、`vault-workbench`),其内子区用 `<scope>-<part>`(如 `vault-nav-header`、`vault-item-content-card`)。
+
 ## 包与目录
 
 - `apps/web` — Next.js 应用。百度/Google 登录 + 统一字节文件 API + 浏览器端加解密保险库 UI。存储抽象在 `src/lib/storage.ts`。
