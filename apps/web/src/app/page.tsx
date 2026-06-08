@@ -18,7 +18,8 @@ export default async function Home({
   const { error } = await searchParams;
 
   if (!conn) {
-    return <Landing error={error} />;
+    // 桌面模式(sidecar 设 KEYSARK_DESKTOP=1)v1 仅 Google,隐藏百度入口。
+    return <Landing error={error} hideBaidu={process.env.KEYSARK_DESKTOP === "1"} />;
   }
 
   let vaults: VaultDescriptor[] = [];

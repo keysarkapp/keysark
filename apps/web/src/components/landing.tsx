@@ -14,7 +14,7 @@ const FEATURES: { title: MsgKey; body: MsgKey }[] = [
   { title: "feat_3_title", body: "feat_3_body" },
 ];
 
-export function Landing({ error }: { error?: string }) {
+export function Landing({ error, hideBaidu }: { error?: string; hideBaidu?: boolean }) {
   const t = useT();
   const errMsg = error
     ? error === "oauth_state"
@@ -41,11 +41,13 @@ export function Landing({ error }: { error?: string }) {
                 {t("nav_connect_google")}
               </Button>
             </a>
-            <a href="/api/auth/login">
-              <Button variant="outline" size="sm">
-                {t("nav_connect")}
-              </Button>
-            </a>
+            {hideBaidu ? null : (
+              <a href="/api/auth/login">
+                <Button variant="outline" size="sm">
+                  {t("nav_connect")}
+                </Button>
+              </a>
+            )}
           </div>
         </header>
 
@@ -69,11 +71,13 @@ export function Landing({ error }: { error?: string }) {
                 {t("cta_google")}
               </Button>
             </a>
-            <a href="/api/auth/login">
-              <Button size="lg" variant="outline" className="px-8">
-                {t("cta_primary")}
-              </Button>
-            </a>
+            {hideBaidu ? null : (
+              <a href="/api/auth/login">
+                <Button size="lg" variant="outline" className="px-8">
+                  {t("cta_primary")}
+                </Button>
+              </a>
+            )}
             <a href="#how">
               <Button size="lg" variant="ghost">
                 {t("cta_secondary")}

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { getConnectedStorage } from "@/lib/storage";
+import { getStorageForRequest } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
 // 下载文件原始字节,base64 返回(不透明,客户端解密)。
 export async function GET(request: Request) {
-  const conn = await getConnectedStorage();
+  const conn = await getStorageForRequest(request);
   if (!conn) return NextResponse.json({ error: "not_connected" }, { status: 401 });
 
   const fileId = new URL(request.url).searchParams.get("fileId");

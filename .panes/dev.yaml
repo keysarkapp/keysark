@@ -3,3 +3,6 @@ dir: ..
 commands:
   # Next.js dev server (固定端口 6134)
   - exec: pnpm --filter @keysark/web dev
+  # 桌面应用 (Tauri shell + Node sidecar)。需先完成原生收尾:
+  # `tauri icon <png>` 生成图标 + 首次构建生成 gen/ schema(见 apps/desktop/README.md)。
+  - exec: pnpm --filter @keysark/desktop dev

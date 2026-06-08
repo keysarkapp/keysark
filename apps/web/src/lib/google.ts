@@ -36,11 +36,15 @@ export interface ConnectedGoogle {
   sub: string;
 }
 
-/** 取已连接的 Google Drive 客户端,必要时刷新 token 并写回 DB。未连接返回 null。 */
+/** 取已连接的 Google Drive 客户端(读会话 cookie 决定账号)。未连接返回 null。 */
 export async function getConnectedGoogle(): Promise<ConnectedGoogle | null> {
   const sub = (await cookies()).get(GOOGLE_UID_COOKIE)?.value;
   if (!sub) return null;
+  return getConnectedGoogleBySub(sub);
+}
 
+/** 按 Google sub 取已连接客户端(无 cookie 路径:本地接口按唯一账号解析时用)。必要时刷新 token 写回。 */
+export async function getConnectedGoogleBySub(sub: string): Promise<ConnectedGoogle | null> {
   const account = await getStorageAccount(PROVIDER, sub);
   if (!account) return null;
 

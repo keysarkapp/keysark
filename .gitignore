@@ -8,6 +8,9 @@ build
 coverage
 *.tsbuildinfo
 
+# rust / tauri build output
+target/
+
 .env
 .env.*
 !.env.example

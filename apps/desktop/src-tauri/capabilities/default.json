@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "默认能力:窗口由 Rust 侧创建并指向本地 sidecar。",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

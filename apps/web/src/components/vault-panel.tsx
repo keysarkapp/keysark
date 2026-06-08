@@ -40,7 +40,6 @@ import {
   FolderPlus,
   FolderTree,
   GripVertical,
-  Inbox,
   LayoutList,
   MoreHorizontal,
   Pencil,
@@ -51,7 +50,7 @@ import { Logo, Wordmark } from "./brand";
 import { HeaderControls } from "./controls";
 import { UserMenu } from "./user-menu";
 import { useLocale, useT } from "./providers";
-import { Vault, itemRelPath, type EntryMeta, type FolderMeta } from "@/lib/vault";
+import { Vault, openBrowserVault, itemRelPath, type EntryMeta, type FolderMeta } from "@/lib/vault";
 import type { MsgKey } from "@/lib/i18n";
 import { saveKey, loadKey, deleteKey } from "@/lib/key-store";
 import { testId } from "@/lib/test-id";
@@ -223,9 +222,9 @@ export function VaultPanel({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  // 拖拽:被拖动的条目 id;当前悬停的放置目标("root" 或文件夹 id)。
+  // 拖拽:被拖动的条目 id;当前悬停的放置目标(文件夹 id)。
   const [dragId, setDragId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<string | "root" | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   // 搜索结果(扁平):仅在搜索框非空时使用,跨所有文件夹按标题匹配。
   const filtered = useMemo(() => {
@@ -286,7 +285,7 @@ export function VaultPanel({
   }, [phase, selectedVault]);
 
   async function enterVault(key: CryptoKey, descriptor: VaultDescriptor) {
-    const v = new Vault(key, { id: descriptor.id, dir: descriptor.dir });
+    const v = openBrowserVault(key, { id: descriptor.id, dir: descriptor.dir });
     vaultRef.current = v;
     setSelectedVault(descriptor);
     setPhase("unlocked");
@@ -1276,10 +1275,6 @@ export function VaultPanel({
               </p>
             ) : (
               <div {...testId("vault-flat-list")} className="flex flex-col">
-                <div className="flex items-center gap-2 px-2.5 pb-1.5 pt-0.5 text-xs font-medium text-[var(--color-muted-foreground)]">
-                  <Inbox className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{t("flat_count", entries.length)}</span>
-                </div>
                 {flatGroups
                   ? flatGroups.map((g) => (
                       <section key={g.key} {...testId("vault-flat-group")} className="mb-1">
@@ -1293,49 +1288,16 @@ export function VaultPanel({
               </div>
             )
           ) : (
-            // ---- 目录:文件夹树 + 根目录放置目标 ----
-            <>
-              <button
-                type="button"
-                onClick={() => setNav({ kind: "all" })}
-                onDragOver={(ev) => {
-                  if (!dragId) return;
-                  ev.preventDefault();
-                  ev.dataTransfer.dropEffect = "move";
-                  setDropTarget("root");
-                }}
-                onDragLeave={() => setDropTarget((p) => (p === "root" ? null : p))}
-                onDrop={(ev) => {
-                  ev.preventDefault();
-                  const id = dragId ?? ev.dataTransfer.getData("text/plain");
-                  setDropTarget(null);
-                  setDragId(null);
-                  if (id) moveItemToFolder(id, null);
-                }}
-                className={`flex w-full items-center gap-2 rounded-[var(--radius)] px-2.5 py-2 text-left text-sm font-medium ${
-                  dropTarget === "root"
-                    ? "ring-1 ring-[var(--color-primary)] ring-inset bg-[var(--color-accent)]"
-                    : nav.kind === "all"
-                      ? "bg-[var(--color-accent)] text-[var(--color-accent-foreground)]"
-                      : "hover:bg-[var(--color-accent)]"
-                }`}
-              >
-                <Inbox className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
-                <span className="flex-1 truncate">{t("all_items")}</span>
-                <span className="text-xs tabular-nums text-[var(--color-muted-foreground)]">
-                  {entries.length}
-                </span>
-              </button>
-              <div {...testId("vault-tree-list")} className="mt-1 flex flex-col">
-                {entries.length === 0 && folders.length === 0 ? (
-                  <p className="px-3 py-8 text-center text-sm text-[var(--color-muted-foreground)]">
-                    {t("empty_vault")}
-                  </p>
-                ) : (
-                  treeRows(null, 0)
-                )}
-              </div>
-            </>
+            // ---- 目录:文件夹树 ----
+            <div {...testId("vault-tree-list")} className="flex flex-col">
+              {entries.length === 0 && folders.length === 0 ? (
+                <p className="px-3 py-8 text-center text-sm text-[var(--color-muted-foreground)]">
+                  {t("empty_vault")}
+                </p>
+              ) : (
+                treeRows(null, 0)
+              )}
+            </div>
           )}
         </div>
       </aside>

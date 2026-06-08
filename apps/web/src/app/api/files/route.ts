@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { getConnectedStorage } from "@/lib/storage";
+import { getStorageForRequest } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
 // 列出存储目录文件。只暴露 id/name/size —— 内容不在这里。?dir= 指定子目录(默认根)。
 export async function GET(request: Request) {
-  const conn = await getConnectedStorage();
+  const conn = await getStorageForRequest(request);
   if (!conn) return NextResponse.json({ error: "not_connected" }, { status: 401 });
 
   const dir = new URL(request.url).searchParams.get("dir") ?? "";
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
 // 保存/更新文件。Body 为不透明 base64 字节(内容由客户端加密,服务端不解读)。
 export async function POST(request: Request) {
-  const conn = await getConnectedStorage();
+  const conn = await getStorageForRequest(request);
   if (!conn) return NextResponse.json({ error: "not_connected" }, { status: 401 });
 
   const body = (await request.json()) as { path?: string; contentB64?: string };

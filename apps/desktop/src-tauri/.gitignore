@@ -1,0 +1,7 @@
+# Rust 构建产物
+/target
+# Tauri 生成的 schema/能力
+/gen
+# bundle:sidecar 填充的产物(保留 README 占位)
+/sidecar/*
+!/sidecar/README.md

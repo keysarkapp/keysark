@@ -1,0 +1,16 @@
+{
+  "name": "@keysark/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:web": "KEYSARK_STANDALONE=1 pnpm --filter @keysark/web build",
+    "bundle:sidecar": "node ./scripts/bundle-sidecar.mjs",
+    "tauri": "tauri",
+    "dev": "KEYSARK_DESKTOP_URL=http://localhost:6134 tauri dev",
+    "build": "pnpm run build:web && pnpm run bundle:sidecar && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
