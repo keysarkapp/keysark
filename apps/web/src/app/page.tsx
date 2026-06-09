@@ -1,4 +1,5 @@
 import { getConnectedStorage } from "@/lib/storage";
+import { providerFlags } from "@/lib/providers";
 import { Landing } from "@/components/landing";
 import { VaultPanel } from "@/components/vault-panel";
 import {
@@ -18,8 +19,8 @@ export default async function Home({
   const { error } = await searchParams;
 
   if (!conn) {
-    // 桌面模式(sidecar 设 KEYSARK_DESKTOP=1)v1 仅 Google,隐藏百度入口。
-    return <Landing error={error} hideBaidu={process.env.KEYSARK_DESKTOP === "1"} />;
+    // 登录入口由环境变量开关决定(默认仅 Google Drive),详见 @/lib/providers。
+    return <Landing error={error} providers={providerFlags()} />;
   }
 
   let vaults: VaultDescriptor[] = [];

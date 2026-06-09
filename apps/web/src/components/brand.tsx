@@ -1,27 +1,21 @@
-// KeysArk 原创品牌标识:盾形「方舟」+ 钥匙孔,寓意把密钥稳妥载于方舟之内。
-// 纯几何 SVG,跟随 currentColor;不使用任何第三方品牌素材。
+// KeysArk 官方品牌标识(取自 logos 资源包 keysark-icon):盾形「方舟」外壳 + 钥匙孔,
+// 寓意把密钥稳妥载于方舟之内。外壳跟随主色(随主题深浅自适应),钥匙孔为品牌琥珀色。
+const BRAND_AMBER = "#F59E0B";
 
 export function Logo({ className }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 32 32"
+      viewBox="0 0 100 100"
       fill="none"
       aria-hidden="true"
       className={className}
     >
       <path
-        d="M16 2.5 26 6.2v8.3c0 6.6-4.2 11.6-10 13.9C10.2 26.1 6 21.1 6 14.5V6.2L16 2.5Z"
+        d="M14 7 H86 Q95 7 95 18 V58 Q95 77 77 89 Q62 96 50 96 Q38 96 23 89 Q5 77 5 58 V18 Q5 7 14 7 Z"
         className="fill-[var(--color-primary)]"
       />
-      <circle cx="16" cy="13" r="3.1" className="fill-[var(--color-primary-foreground)]" />
-      <rect
-        x="14.7"
-        y="13"
-        width="2.6"
-        height="6.6"
-        rx="1.3"
-        className="fill-[var(--color-primary-foreground)]"
-      />
+      <circle cx="50" cy="44" r="11" fill={BRAND_AMBER} />
+      <path d="M45.5 50 L42 72 H58 L54.5 50 Z" fill={BRAND_AMBER} />
     </svg>
   );
 }

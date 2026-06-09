@@ -24,29 +24,45 @@ const zh = {
   user_fallback: "百度用户",
 
   // 落地页
+  store_baidu: "百度网盘",
+  store_google: "Google Drive",
   nav_connect: "连接百度网盘",
   nav_connect_google: "用 Google 登录",
   cta_google: "用 Google 登录,存进 Google Drive",
   hero_badge: "零知识 · 端到端加密",
   hero_title_1: "你的秘密,",
   hero_title_2: "只有你能打开。",
-  hero_subtitle:
-    "KeysArk 是端到端加密的文本保管库。用一组助记词守护一切,密文存进你自己的百度网盘——除了你,没有人能读到里面的内容。",
+  hero_subtitle: (store: string) =>
+    `KeysArk 是端到端加密的文本保管库。用一组助记词守护一切,密文存进你自己的${store}——除了你,没有人能读到里面的内容。`,
   cta_primary: "连接百度网盘,免费开始",
   cta_secondary: "了解工作原理",
-  footer_tagline: "端到端加密 · 百度网盘为唯一存储后端",
+  // 工作原理示意图
+  how_title: "工作原理",
+  how_subtitle: "明文与密钥只在你的浏览器里;离开设备的,永远只有密文。",
+  how_browser_label: "你的浏览器",
+  how_browser_note: "助记词、派生密钥、明文都只存在于此,永不上传。",
+  how_s1_title: "写下助记词",
+  how_s1_body: "生成或输入 12 词 BIP39 助记词,它就是你的主密钥。",
+  how_s2_title: "本地派生密钥",
+  how_s2_body: "助记词在浏览器里派生出 AES-256 密钥。",
+  how_s3_title: "浏览器内加密",
+  how_s3_body: "明文用 AES-256-GCM 封成密文。",
+  how_crossing_label: "仅密文",
+  how_cloud_label: "你的网盘",
+  how_cloud_note: "只有你的助记词能解开。",
+  footer_tagline: (store: string) => `端到端加密 · 存储后端 ${store}`,
   err_state: "登录校验失败,请重试。",
   err_exchange: "授权交换失败,请重试。",
   err_default: "登录出错,请重试。",
   feat_1_title: "端到端加密",
-  feat_1_body:
-    "内容在你的浏览器里用 AES-256-GCM 加密后才离开设备。服务端与百度网盘只经手不透明密文,永远看不到明文。",
+  feat_1_body: (store: string) =>
+    `内容在你的浏览器里用 AES-256-GCM 加密后才离开设备。服务端与${store}只经手不透明密文,永远看不到明文。`,
   feat_2_title: "助记词即主密钥",
   feat_2_body:
     "12 词 BIP39 助记词在本地派生密钥,对齐 MetaMask。助记词只属于你,绝不上传——丢失即无法恢复,也无人能替你解密。",
   feat_3_title: "存在你的网盘",
-  feat_3_body:
-    "密文保存在你自己的百度网盘 /apps/Keyper/ 沙盒目录。数据归属清晰,随时可迁移,不被平台绑架。",
+  feat_3_body: (store: string) =>
+    `密文保存在你自己的${store}。数据归属清晰,随时可迁移,不被平台绑架。`,
 
   // 创建保险库
   create_title: "创建你的保险库",
@@ -174,29 +190,45 @@ const en: typeof zh = {
   sign_out: "Sign out",
   user_fallback: "Baidu user",
 
+  store_baidu: "Baidu netdisk",
+  store_google: "Google Drive",
   nav_connect: "Connect Baidu",
   nav_connect_google: "Sign in with Google",
   cta_google: "Sign in with Google — store in Google Drive",
   hero_badge: "Zero-knowledge · End-to-end encrypted",
   hero_title_1: "Your secrets,",
   hero_title_2: "openable only by you.",
-  hero_subtitle:
-    "KeysArk is an end-to-end encrypted text vault. Guard everything with one recovery phrase, with ciphertext stored in your own Baidu netdisk — no one but you can read what's inside.",
+  hero_subtitle: (store: string) =>
+    `KeysArk is an end-to-end encrypted text vault. Guard everything with one recovery phrase, with ciphertext stored in your own ${store} — no one but you can read what's inside.`,
   cta_primary: "Connect Baidu — start free",
   cta_secondary: "How it works",
-  footer_tagline: "End-to-end encrypted · Baidu netdisk as the only storage backend",
+  how_title: "How it works",
+  how_subtitle:
+    "Your plaintext and key stay in your browser. Only ciphertext ever leaves the device.",
+  how_browser_label: "In your browser",
+  how_browser_note: "Your phrase, derived key and plaintext live only here — never uploaded.",
+  how_s1_title: "Write down your phrase",
+  how_s1_body: "Generate or enter a 12-word BIP39 phrase — that's your master key.",
+  how_s2_title: "Derive the key locally",
+  how_s2_body: "The phrase derives an AES-256 key, right in the browser.",
+  how_s3_title: "Encrypt in the browser",
+  how_s3_body: "Plaintext is sealed with AES-256-GCM.",
+  how_crossing_label: "Ciphertext only",
+  how_cloud_label: "Your cloud drive",
+  how_cloud_note: "Only your recovery phrase can unlock it.",
+  footer_tagline: (store: string) => `End-to-end encrypted · Storage backend: ${store}`,
   err_state: "Login verification failed, please try again.",
   err_exchange: "Authorization exchange failed, please try again.",
   err_default: "Login error, please try again.",
   feat_1_title: "End-to-end encrypted",
-  feat_1_body:
-    "Content is encrypted with AES-256-GCM in your browser before it ever leaves the device. The server and Baidu only ever handle opaque ciphertext — never plaintext.",
+  feat_1_body: (store: string) =>
+    `Content is encrypted with AES-256-GCM in your browser before it ever leaves the device. The server and ${store} only ever handle opaque ciphertext — never plaintext.`,
   feat_2_title: "Your phrase is the master key",
   feat_2_body:
     "A 12-word BIP39 phrase derives the key locally, aligned with MetaMask. The phrase is yours alone and never uploaded — lose it and it's unrecoverable; no one can decrypt for you.",
   feat_3_title: "Stored in your netdisk",
-  feat_3_body:
-    "Ciphertext lives in your own Baidu /apps/Keyper/ sandbox folder. Ownership is clear, portable anytime, never locked to a platform.",
+  feat_3_body: (store: string) =>
+    `Ciphertext lives in your own ${store}. Ownership is clear, portable anytime, never locked to a platform.`,
 
   create_title: "Create your vault",
   create_desc_a: "KeysArk generates a 12-word recovery phrase as your master key. It is ",
