@@ -1,1 +1,22 @@
 @import "@keyper/ui/styles.css";
+
+/*
+ * 保存中:让编辑头(vault-item-edit-header)的 45° 斜纹背景沿条纹轴向滑动。
+ * 条纹周期 20px;沿 x 轴平移 28.284px(=20px ÷ cos45°)恰好等于一个周期在轴
+ * 方向上的投影 → 无缝循环。reduced-motion 下静止。
+ */
+@keyframes vault-stripes-slide {
+  to {
+    background-position: 28.284px 0;
+  }
+}
+
+.vault-stripes-saving {
+  animation: vault-stripes-slide 0.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vault-stripes-saving {
+    animation: none;
+  }
+}

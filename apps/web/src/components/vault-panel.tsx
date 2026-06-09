@@ -34,6 +34,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Download,
   ExternalLink,
   FileText,
   Folder,
@@ -53,6 +54,7 @@ import { useLocale, useT } from "./providers";
 import { Vault, openBrowserVault, itemRelPath, type EntryMeta, type FolderMeta } from "@/lib/vault";
 import type { MsgKey } from "@/lib/i18n";
 import { saveKey, loadKey, deleteKey } from "@/lib/key-store";
+import { exportVaultBackupPdf } from "@/lib/vault-pdf";
 import { testId } from "@/lib/test-id";
 import type { StorageProvider } from "@/lib/storage";
 import {
@@ -160,6 +162,8 @@ export function VaultPanel({
   // 创建流程
   const [newLabel, setNewLabel] = useState("");
   const [newMnemonic, setNewMnemonic] = useState<string | null>(null);
+  const [downloaded, setDownloaded] = useState(false); // 已下载 PDF 备份(完整助记词只在 PDF 里)
+  const [exporting, setExporting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const challengeIdx = useMemo(() => {
     const idx = new Set<number>();
@@ -375,9 +379,30 @@ export function VaultPanel({
   // ---- 创建(新建保险库,追加进注册表) ----
   function genMnemonic() {
     setNewMnemonic(generateMnemonic());
+    setDownloaded(false);
     setConfirming(false);
     setChallengeInput({});
     setStatus(null);
+  }
+
+  // 下载保险库备份 PDF(完整助记词只在此文件里;纯客户端生成,不走服务端)。
+  async function downloadBackup() {
+    if (!newMnemonic) return;
+    setExporting(true);
+    try {
+      const label = vaults.length === 0 ? "default" : newLabel.trim() || "default";
+      await exportVaultBackupPdf({
+        mnemonic: newMnemonic,
+        vaultName: label,
+        url: window.location.origin,
+        locale,
+      });
+      setDownloaded(true);
+    } catch (err) {
+      setStatus(t("st_save_fail", String(err)));
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function finishCreate() {
@@ -428,6 +453,7 @@ export function VaultPanel({
   function goCreate() {
     setNewMnemonic(null);
     setNewLabel("");
+    setDownloaded(false);
     setConfirming(false);
     setChallengeInput({});
     setMnemonicInput("");
@@ -764,23 +790,61 @@ export function VaultPanel({
               </>
             ) : !confirming ? (
               <>
-                <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {newMnemonic.split(" ").map((w, i) => (
-                    <li
-                      key={i}
-                      className="flex items-center gap-2 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 font-mono text-sm"
-                    >
-                      <span className="text-[var(--color-muted-foreground)] tabular-nums">
-                        {i + 1}.
-                      </span>
-                      <span className="font-medium">{w}</span>
-                    </li>
-                  ))}
+                {/* 前两行清晰,其余模糊 + 渐变淡出:完整助记词只能在下载的 PDF 里看到。 */}
+                <ol
+                  className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+                  style={{
+                    maskImage: "linear-gradient(to bottom, #000 0 44%, transparent 86%)",
+                    WebkitMaskImage: "linear-gradient(to bottom, #000 0 44%, transparent 86%)",
+                  }}
+                >
+                  {newMnemonic.split(" ").map((w, i) => {
+                    const hidden = i >= 6;
+                    return (
+                      <li
+                        key={i}
+                        className="flex items-center gap-2 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 font-mono text-sm"
+                      >
+                        <span className="text-[var(--color-muted-foreground)] tabular-nums">
+                          {i + 1}.
+                        </span>
+                        <span
+                          className={`font-medium ${hidden ? "select-none blur-[5px]" : ""}`}
+                          aria-hidden={hidden}
+                        >
+                          {w}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ol>
-                <p className="text-xs text-[var(--color-muted-foreground)]">{t("copy_hint")}</p>
-                <Button onClick={() => setConfirming(true)} disabled={busy} size="lg">
-                  {t("btn_copied")}
+                <p className="text-xs text-[var(--color-muted-foreground)]">
+                  {t("reveal_hint_obscured")}
+                </p>
+                <Button
+                  onClick={downloadBackup}
+                  disabled={busy || exporting}
+                  size="lg"
+                  variant={downloaded ? "outline" : "default"}
+                >
+                  <Download className="h-4 w-4" />
+                  {exporting ? t("pdf_downloading") : t("pdf_download_btn")}
                 </Button>
+                {downloaded ? (
+                  <>
+                    <p className="text-xs text-[var(--color-success)]">
+                      {t("pdf_downloaded_note")}
+                    </p>
+                    <Button
+                      onClick={() => setConfirming(true)}
+                      disabled={busy}
+                      size="lg"
+                      variant="secondary"
+                    >
+                      {t("btn_copied")}
+                    </Button>
+                  </>
+                ) : null}
               </>
             ) : (
               <>
@@ -1336,7 +1400,7 @@ export function VaultPanel({
             <div {...testId("vault-item-edit")} className="w-full">
               <div
                 {...testId("vault-item-edit-header")}
-                className="flex items-center justify-between gap-3 px-6 py-3"
+                className={`flex items-center justify-between gap-3 px-6 py-3${busy ? " vault-stripes-saving" : ""}`}
                 style={{
                   backgroundImage:
                     "repeating-linear-gradient(45deg, color-mix(in oklch, var(--color-primary) 14%, transparent) 0, color-mix(in oklch, var(--color-primary) 14%, transparent) 10px, color-mix(in oklch, var(--color-primary) 5%, transparent) 10px, color-mix(in oklch, var(--color-primary) 5%, transparent) 20px)",

@@ -27,8 +27,8 @@ const zh = {
   store_baidu: "百度网盘",
   store_google: "Google Drive",
   nav_connect: "连接百度网盘",
-  nav_connect_google: "用 Google 登录",
-  cta_google: "用 Google 登录,存进 Google Drive",
+  nav_connect_google: "使用 Google 继续",
+  cta_google: "使用 Google 继续",
   hero_badge: "零知识 · 端到端加密",
   hero_title_1: "你的秘密,",
   hero_title_2: "只有你能打开。",
@@ -54,15 +54,18 @@ const zh = {
   err_state: "登录校验失败,请重试。",
   err_exchange: "授权交换失败,请重试。",
   err_default: "登录出错,请重试。",
+  feat_1_tag: "安全",
   feat_1_title: "端到端加密",
   feat_1_body: (store: string) =>
-    `内容在你的浏览器里用 AES-256-GCM 加密后才离开设备。服务端与${store}只经手不透明密文,永远看不到明文。`,
+    `内容在浏览器里用 AES-256-GCM 加密后才离开设备,${store}与服务端全程只经手密文——就算被脱库,也读不到一个字。`,
+  feat_2_tag: "易用",
   feat_2_title: "助记词即主密钥",
   feat_2_body:
-    "12 词 BIP39 助记词在本地派生密钥,对齐 MetaMask。助记词只属于你,绝不上传——丢失即无法恢复,也无人能替你解密。",
+    "只需记住 12 个单词,就能在任何设备解锁——无需账号密码,也没有密钥文件要保管。沿用 BIP39 标准,和 MetaMask 一致。",
+  feat_3_tag: "免费",
   feat_3_title: "存在你的网盘",
   feat_3_body: (store: string) =>
-    `密文保存在你自己的${store}。数据归属清晰,随时可迁移,不被平台绑架。`,
+    `密文直接存进你自己的${store},用你已有的免费空间——我们不碰你的存储,也不向你收一分钱。`,
 
   // 创建保险库
   create_title: "创建你的保险库",
@@ -74,10 +77,27 @@ const zh = {
   create_warn_b: ",没有任何人(包括我们)能替你找回。",
   btn_generate: "生成助记词",
   copy_hint: "抄写完成后继续,下一步会抽查几个词以确认你已备份。",
-  btn_copied: "我已抄写,继续",
+  btn_copied: "我已保存,继续",
   confirm_prompt: "请按编号填入对应的词以确认备份:",
   word_nth: (n: number) => `第 ${n} 个`,
   btn_confirm_create: "确认并创建",
+  // 助记词遮挡 + PDF 导出
+  reveal_hint_obscured: "完整助记词不在屏幕上显示——请下载 PDF 备份并妥善离线保管。",
+  pdf_download_btn: "下载 PDF 备份",
+  pdf_downloading: "生成中…",
+  pdf_downloaded_note: "已下载。请确认安全保存后再继续。",
+  pdf_doc_title: "保险库备份",
+  pdf_url_label: "访问网址",
+  pdf_name_label: "保险库名称",
+  pdf_phrase_label: "助记词(主密钥 · 12 词)",
+  pdf_risk_title: "风险提示 · 务必阅读",
+  pdf_risk_1:
+    "这 12 个词是打开保险库的唯一主密钥;任何人拿到它,就能解密你的全部内容。",
+  pdf_risk_2: "我们不保存、也无法找回你的助记词。一旦丢失,数据将永久无法恢复。",
+  pdf_risk_3:
+    "请离线保管本文件:打印或存入加密磁盘。切勿截图、上传云端,或通过聊天、邮件发送。",
+  pdf_risk_4: "输入助记词前,务必确认网址与上方一致,谨防钓鱼网站。",
+  pdf_generated: (d: string) => `生成时间:${d}`,
   btn_review_again: "再看一遍助记词",
 
   // 选择保险库
@@ -193,8 +213,8 @@ const en: typeof zh = {
   store_baidu: "Baidu netdisk",
   store_google: "Google Drive",
   nav_connect: "Connect Baidu",
-  nav_connect_google: "Sign in with Google",
-  cta_google: "Sign in with Google — store in Google Drive",
+  nav_connect_google: "Continue with Google",
+  cta_google: "Continue with Google",
   hero_badge: "Zero-knowledge · End-to-end encrypted",
   hero_title_1: "Your secrets,",
   hero_title_2: "openable only by you.",
@@ -220,15 +240,18 @@ const en: typeof zh = {
   err_state: "Login verification failed, please try again.",
   err_exchange: "Authorization exchange failed, please try again.",
   err_default: "Login error, please try again.",
+  feat_1_tag: "Secure",
   feat_1_title: "End-to-end encrypted",
   feat_1_body: (store: string) =>
-    `Content is encrypted with AES-256-GCM in your browser before it ever leaves the device. The server and ${store} only ever handle opaque ciphertext — never plaintext.`,
+    `Content is sealed with AES-256-GCM in your browser before it leaves the device; ${store} and our servers only ever see ciphertext — a breach reveals nothing.`,
+  feat_2_tag: "Easy",
   feat_2_title: "Your phrase is the master key",
   feat_2_body:
-    "A 12-word BIP39 phrase derives the key locally, aligned with MetaMask. The phrase is yours alone and never uploaded — lose it and it's unrecoverable; no one can decrypt for you.",
+    "Just remember 12 words to unlock on any device — no passwords, no key files to manage. Standard BIP39, same as MetaMask.",
+  feat_3_tag: "Free",
   feat_3_title: "Stored in your netdisk",
   feat_3_body: (store: string) =>
-    `Ciphertext lives in your own ${store}. Ownership is clear, portable anytime, never locked to a platform.`,
+    `Ciphertext goes straight into your own ${store}, using free space you already have — we never touch your storage or charge you.`,
 
   create_title: "Create your vault",
   create_desc_a: "KeysArk generates a 12-word recovery phrase as your master key. It is ",
@@ -239,10 +262,29 @@ const en: typeof zh = {
   create_warn_b: "; no one (including us) can recover it for you.",
   btn_generate: "Generate phrase",
   copy_hint: "Continue once you've written it down; next we'll spot-check a few words.",
-  btn_copied: "I've written it down, continue",
+  btn_copied: "I've saved it, continue",
   confirm_prompt: "Enter the words by number to confirm your backup:",
   word_nth: (n: number) => `Word ${n}`,
   btn_confirm_create: "Confirm & create",
+  reveal_hint_obscured:
+    "The full phrase isn't shown on screen — download the PDF backup and keep it safe offline.",
+  pdf_download_btn: "Download PDF backup",
+  pdf_downloading: "Generating…",
+  pdf_downloaded_note: "Downloaded. Make sure it's safely stored before continuing.",
+  pdf_doc_title: "Vault Backup",
+  pdf_url_label: "Access URL",
+  pdf_name_label: "Vault name",
+  pdf_phrase_label: "Recovery phrase (master key · 12 words)",
+  pdf_risk_title: "Important — please read",
+  pdf_risk_1:
+    "These 12 words are the only master key to your vault; anyone who gets them can decrypt everything you store.",
+  pdf_risk_2:
+    "We never store and cannot recover your phrase. If you lose it, your data is gone forever.",
+  pdf_risk_3:
+    "Keep this file offline: print it or store it on an encrypted disk. Never screenshot, upload to the cloud, or send it via chat or email.",
+  pdf_risk_4:
+    "Before entering your phrase, make sure the URL matches the one above — beware of phishing.",
+  pdf_generated: (d: string) => `Generated: ${d}`,
   btn_review_again: "Show the phrase again",
 
   select_title: "Choose a vault",

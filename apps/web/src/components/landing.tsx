@@ -20,10 +20,10 @@ import type { MsgKey } from "@/lib/i18n";
 import { storageLabel, type ProviderFlags } from "@/lib/providers";
 import { testId } from "@/lib/test-id";
 
-const FEATURES: { title: MsgKey; body: MsgKey; icon: LucideIcon }[] = [
-  { title: "feat_1_title", body: "feat_1_body", icon: ShieldCheck },
-  { title: "feat_2_title", body: "feat_2_body", icon: KeyRound },
-  { title: "feat_3_title", body: "feat_3_body", icon: CloudUpload },
+const FEATURES: { tag: MsgKey; title: MsgKey; body: MsgKey; icon: LucideIcon }[] = [
+  { tag: "feat_1_tag", title: "feat_1_title", body: "feat_1_body", icon: ShieldCheck },
+  { tag: "feat_2_tag", title: "feat_2_title", body: "feat_2_body", icon: KeyRound },
+  { tag: "feat_3_tag", title: "feat_3_title", body: "feat_3_body", icon: CloudUpload },
 ];
 
 // 工作原理示意图:浏览器边界内的三步(slug 稳定,供 testId 用),边界外是云端存储。
@@ -48,9 +48,10 @@ export function Landing({ error, providers }: { error?: string; providers: Provi
 
   return (
     <div {...testId("landing")} className="relative flex min-h-screen flex-col">
-      {/* 背景层 */}
+      {/* 背景层(纯 CSS 动态:漂移极光 + 平移网格 + 扫描光束) */}
       <div className="hero-aurora" aria-hidden="true" />
       <div className="hero-grid" aria-hidden="true" />
+      <div className="hero-scan" aria-hidden="true" />
 
       <div className="relative z-10 flex min-h-screen flex-col">
         {/* 顶栏 */}
@@ -129,7 +130,11 @@ export function Landing({ error, providers }: { error?: string; providers: Provi
                   <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[calc(var(--radius)+0.125rem)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
                     <f.icon className="h-5 w-5" aria-hidden="true" />
                   </span>
-                  <h3 className="text-base font-semibold tracking-tight">{t(f.title)}</h3>
+                  <h3 className="text-base font-semibold tracking-tight">
+                    <span className="text-[var(--color-primary)]">{t(f.tag)}</span>
+                    <span className="mx-1.5 font-normal text-[var(--color-muted-foreground)]">·</span>
+                    {t(f.title)}
+                  </h3>
                 </div>
                 <p className="mt-3 text-sm leading-relaxed text-[var(--color-muted-foreground)]">
                   {t(f.body, store)}

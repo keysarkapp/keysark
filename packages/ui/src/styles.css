@@ -93,29 +93,50 @@
 
 /*
  * Original KeysArk hero backdrop — pure CSS, no external/raster assets.
- * Soft theme-aware aurora glows + a faint grid masked to fade out.
+ * Theme-aware aurora glows (slow parallax drift) + a faint downward-panning
+ * grid + a periodic scan beam. All motion is GPU-friendly (opacity/transform)
+ * and disabled under prefers-reduced-motion.
  */
 .hero-aurora {
   position: absolute;
   inset: 0;
   z-index: 0;
+  overflow: hidden;
   pointer-events: none;
-  background:
-    radial-gradient(
-      55rem 28rem at 50% -12%,
-      color-mix(in oklch, var(--color-primary) 24%, transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      36rem 22rem at 85% 6%,
-      color-mix(in oklch, var(--color-primary) 14%, transparent),
-      transparent 72%
-    ),
-    radial-gradient(
-      34rem 22rem at 12% 14%,
-      color-mix(in oklch, var(--color-success) 12%, transparent),
-      transparent 72%
-    );
+  background: radial-gradient(
+    55rem 28rem at 50% -12%,
+    color-mix(in oklch, var(--color-primary) 24%, transparent),
+    transparent 70%
+  );
+  animation: aurora-breathe 14s ease-in-out infinite alternate;
+}
+
+/* Two independent glow blobs drifting at different speeds → parallax aurora. */
+.hero-aurora::before,
+.hero-aurora::after {
+  content: "";
+  position: absolute;
+  inset: -15%;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.hero-aurora::before {
+  background: radial-gradient(
+    36rem 22rem at 85% 6%,
+    color-mix(in oklch, var(--color-primary) 16%, transparent),
+    transparent 72%
+  );
+  animation: aurora-drift-a 26s ease-in-out infinite alternate;
+}
+
+.hero-aurora::after {
+  background: radial-gradient(
+    34rem 22rem at 12% 14%,
+    color-mix(in oklch, var(--color-success) 13%, transparent),
+    transparent 72%
+  );
+  animation: aurora-drift-b 32s ease-in-out infinite alternate;
 }
 
 .hero-grid {
@@ -137,4 +158,91 @@
   background-size: 3.5rem 3.5rem;
   -webkit-mask-image: radial-gradient(72% 56% at 50% 0%, #000, transparent 76%);
   mask-image: radial-gradient(72% 56% at 50% 0%, #000, transparent 76%);
+  /* 3.5rem period → seamless loop. */
+  animation: grid-pan 18s linear infinite;
+}
+
+/* A faint beam sweeping across the top region, then pausing before repeat. */
+.hero-scan {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.hero-scan::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklch, var(--color-primary) 12%, transparent),
+    transparent
+  );
+  -webkit-mask-image: radial-gradient(72% 56% at 50% 0%, #000, transparent 76%);
+  mask-image: radial-gradient(72% 56% at 50% 0%, #000, transparent 76%);
+  transform: translateX(-120%);
+  will-change: transform;
+  animation: scan-sweep 9s ease-in-out infinite;
+}
+
+@keyframes aurora-breathe {
+  from {
+    opacity: 0.82;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes aurora-drift-a {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(-6%, 4%, 0) scale(1.12);
+  }
+}
+
+@keyframes aurora-drift-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(7%, -3%, 0) scale(1.1);
+  }
+}
+
+@keyframes grid-pan {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 3.5rem;
+  }
+}
+
+@keyframes scan-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  55% {
+    transform: translateX(320%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-aurora,
+  .hero-aurora::before,
+  .hero-aurora::after,
+  .hero-grid,
+  .hero-scan::before {
+    animation: none;
+  }
 }
