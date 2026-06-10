@@ -52,6 +52,7 @@ import {
   GripVertical,
   History,
   LayoutList,
+  Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -196,8 +197,9 @@ export function VaultPanel({
   const [mnemonicInput, setMnemonicInput] = useState("");
   // 当前选中保险库在本机是否已设解锁密码(null=探测中;决定解锁界面显示密码框还是助记词框)。
   const [credExists, setCredExists] = useState<boolean | null>(null);
-  // 密码解锁输入
+  // 密码解锁输入;pwError = 密码错误等需要标红的提示(独立于灰色状态条)。
   const [passwordInput, setPasswordInput] = useState("");
+  const [pwError, setPwError] = useState<string | null>(null);
   // 有凭据但用户点了「忘记密码?用助记词解锁」:本次走助记词,验证后重新设密码。
   const [phraseFallback, setPhraseFallback] = useState(false);
   // 助记词验证通过 / 新库创建完成后,待设密码的 {主密钥, 助记词};设完密码才进库。
@@ -323,6 +325,7 @@ export function VaultPanel({
   useEffect(() => {
     setPhraseFallback(false);
     setPasswordInput("");
+    setPwError(null);
     if (phase !== "unlock" || !selectedVault) {
       setCredExists(null);
       return;
@@ -439,7 +442,7 @@ export function VaultPanel({
     if (!validateMnemonic(m)) return setStatus(t("st_invalid_mnemonic"));
     if (!selectedVault) return setStatus(t("st_missing_meta"));
     setBusy(true);
-    setStatus(t("st_unlocking"));
+    setStatus(null); // loading 效果在按钮上(spinner),不占状态条
     try {
       const k = await deriveKey(m);
       const verifierBytes = b64decode(selectedVault.verifier);
@@ -462,14 +465,16 @@ export function VaultPanel({
     const v = selectedVault;
     if (!v || !passwordInput) return;
     setBusy(true);
-    setStatus(t("st_unlocking"));
+    setPwError(null);
+    setStatus(null); // loading 效果在按钮上(spinner),不占状态条
     try {
       let mnemonic: string;
       try {
         mnemonic = await unlockCredential(v.id, passwordInput);
       } catch {
-        // GCM 认证失败 = 密码错误;不泄露其他信息。
-        setStatus(t("st_wrong_password"));
+        // GCM 认证失败 = 密码错误;标红提示,不泄露其他信息。
+        setStatus(null);
+        setPwError(t("st_wrong_password"));
         return;
       }
       const k = await deriveKey(mnemonic);
@@ -1229,7 +1234,10 @@ export function VaultPanel({
                   type="password"
                   autoComplete="current-password"
                   value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
+                  onChange={(e) => {
+                    setPasswordInput(e.target.value);
+                    setPwError(null);
+                  }}
                   placeholder={t("pw_input_ph")}
                   autoFocus
                   disabled={busy}
@@ -1237,16 +1245,20 @@ export function VaultPanel({
                     if (e.key === "Enter" && passwordInput) unlockWithPassword();
                   }}
                 />
+                {pwError ? (
+                  <p {...testId("vault-unlock-error")} className="text-xs text-[var(--color-danger)]">
+                    {pwError}
+                  </p>
+                ) : null}
                 <Button onClick={unlockWithPassword} disabled={busy || !passwordInput} size="lg">
-                  {t("btn_unlock")}
-                </Button>
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={() => setPhraseFallback(true)}
-                  disabled={busy}
-                >
-                  {t("forgot_password")}
+                  {busy ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {t("st_unlocking")}
+                    </>
+                  ) : (
+                    t("btn_unlock")
+                  )}
                 </Button>
               </>
             ) : (
@@ -1263,11 +1275,28 @@ export function VaultPanel({
                   }}
                 />
                 <Button onClick={verifyPhrase} disabled={busy} size="lg">
-                  {t("btn_phrase_continue")}
+                  {busy ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {t("st_unlocking")}
+                    </>
+                  ) : (
+                    t("btn_phrase_continue")
+                  )}
                 </Button>
               </>
             )}
-            <div className="flex flex-col gap-1 border-t border-[var(--color-border)] pt-3 text-center">
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t border-[var(--color-border)] pt-3">
+              {passwordMode ? (
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={() => setPhraseFallback(true)}
+                  disabled={busy}
+                >
+                  {t("forgot_password")}
+                </Button>
+              ) : null}
               {vaults.length > 1 ? (
                 <Button variant="link" size="sm" onClick={goPick} disabled={busy}>
                   {t("switch_vault")}
