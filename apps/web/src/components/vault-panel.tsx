@@ -47,6 +47,7 @@ import {
   Download,
   ExternalLink,
   Eye,
+  EyeOff,
   File as FileIcon,
   FileText,
   Folder,
@@ -2343,15 +2344,29 @@ export function VaultPanel({
                         <span className="text-[var(--color-muted-foreground)]">{t("content_empty")}</span>
                       </div>
                     ) : revealed ? (
-                      <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{content}</div>
+                      <div className="relative">
+                        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{content}</div>
+                        {/* 揭开后仍可随手再盖上(右上角) */}
+                        <Tooltip label={t("content_hide")}>
+                          <button
+                            type="button"
+                            {...testId("vault-item-content-hide")}
+                            onClick={() => setRevealed(false)}
+                            aria-label={t("content_hide")}
+                            className="absolute -right-1.5 -top-1 flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-foreground)]"
+                          >
+                            <EyeOff className="h-3.5 w-3.5" />
+                          </button>
+                        </Tooltip>
+                      </div>
                     ) : (
-                      // 渐变遮罩:内容默认盖住(上浅下深渐变 + 提示),整块可点,点击揭开全文
+                      // 毛玻璃遮罩:内容默认盖住(backdrop 模糊 + 轻微着色),整块可点,点击揭开全文
                       <button
                         type="button"
                         {...testId("vault-item-content-veil")}
                         onClick={() => setRevealed(true)}
                         aria-label={t("content_reveal")}
-                        className="relative block w-full cursor-pointer text-left"
+                        className="relative block w-full cursor-pointer overflow-hidden rounded-xl text-left"
                       >
                         <div
                           aria-hidden
@@ -2360,10 +2375,9 @@ export function VaultPanel({
                           {content}
                         </div>
                         <div
-                          className="absolute inset-0 flex items-center justify-center"
+                          className="absolute inset-0 flex items-center justify-center backdrop-blur-md"
                           style={{
-                            background:
-                              "linear-gradient(to bottom, color-mix(in oklch, var(--color-accent) 55%, transparent), var(--color-accent) 72%)",
+                            background: "color-mix(in oklch, var(--color-accent) 35%, transparent)",
                           }}
                         >
                           <span className="flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-muted-foreground)] shadow-sm">
