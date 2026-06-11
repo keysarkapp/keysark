@@ -44,28 +44,29 @@ function emptyIndex(): IndexDoc {
   return { v: 2, entries: [], folders: [] };
 }
 
-/** 归一化(兼容旧 v1:补 folders/folderId 默认值;旧数据里的 tags 直接丢弃)。 */
+/**
+ * 归一化(兼容旧 v1:补 folders/folderId 默认值;旧数据里的 tags 直接丢弃)。
+ * 注意:除 tags 外的未知字段必须原样保留(先展开再补默认),否则新老客户端混用时,
+ * 老客户端会把新 schema 字段从 index 里洗掉并随下次保存写回,造成永久丢失。
+ */
 function normalizeIndex(raw: unknown): IndexDoc {
   const r = (raw ?? {}) as Partial<IndexDoc>;
   const folders: FolderMeta[] = Array.isArray(r.folders)
     ? r.folders.filter((f): f is FolderMeta => !!f && typeof f.id === "string")
     : [];
   const entries: EntryMeta[] = Array.isArray(r.entries)
-    ? r.entries.map((e) => ({
-        id: e.id,
-        title: e.title ?? "",
-        folderId: e.folderId ?? null,
-        createdAt: e.createdAt ?? 0,
-        updatedAt: e.updatedAt ?? 0,
-        size: e.size ?? 0,
-        kind: e.kind ?? "text", // 旧数据无 kind → 视为文本
-        ...(e.filename !== undefined ? { filename: e.filename } : {}),
-        ...(e.mimeType !== undefined ? { mimeType: e.mimeType } : {}),
-        ...(e.fileSize !== undefined ? { fileSize: e.fileSize } : {}),
-        ...(e.contentHash !== undefined ? { contentHash: e.contentHash } : {}),
-        ...(e.versions !== undefined ? { versions: e.versions } : {}),
-        ...(e.provider !== undefined ? { provider: e.provider } : {}),
-      }))
+    ? r.entries.map((raw) => {
+        const { tags: _legacyTags, ...e } = raw as EntryMeta & { tags?: unknown };
+        return {
+          ...e,
+          title: e.title ?? "",
+          folderId: e.folderId ?? null,
+          createdAt: e.createdAt ?? 0,
+          updatedAt: e.updatedAt ?? 0,
+          size: e.size ?? 0,
+          kind: e.kind ?? "text", // 旧数据无 kind → 视为文本
+        };
+      })
     : [];
   return { v: 2, entries, folders };
 }

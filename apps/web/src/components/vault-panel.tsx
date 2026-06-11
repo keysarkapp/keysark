@@ -1563,6 +1563,11 @@ export function VaultPanel({
   function itemRow(e: EntryMeta, depth: number): React.ReactNode {
     const active = e.id === selectedId;
     const label = e.title || t("untitled");
+    // 铺平模式看不到层级,行尾补条目的最近(直属)目录名;目录模式层级自明,不显示。
+    const folderName =
+      viewMode === "flat" && e.folderId
+        ? folders.find((f) => f.id === e.folderId)?.name
+        : undefined;
     return (
       <div
         key={`e:${e.id}`}
@@ -1609,6 +1614,18 @@ export function VaultPanel({
             className={`h-3.5 w-3.5 shrink-0 ${active ? "" : "text-[var(--color-muted-foreground)]"}`}
           />
           <span className="truncate">{label}</span>
+          {folderName ? (
+            <span
+              className={`ml-auto flex max-w-[9rem] shrink-0 items-center gap-1 pl-1 text-[11px] ${
+                active
+                  ? "text-[var(--color-primary-foreground)]/75"
+                  : "text-[var(--color-muted-foreground)]"
+              }`}
+            >
+              <Folder className="h-3 w-3 shrink-0" />
+              <span className="truncate">{folderName}</span>
+            </span>
+          ) : null}
           {e.provider ? (
             <Tooltip label={providerDisplay(e.provider).name}>
               <span
