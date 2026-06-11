@@ -46,6 +46,7 @@ import {
   ChevronRight,
   Download,
   ExternalLink,
+  Eye,
   File as FileIcon,
   FileText,
   Folder,
@@ -270,6 +271,7 @@ export function VaultPanel({
   // 最近一次「本地与网盘确认一致」的时刻(待同步清零时打点);顶栏显示相对时间。
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false); // 手动同步进行中(头部按钮转圈用)
+  const [revealed, setRevealed] = useState(false); // 预览内容是否已揭开(默认渐变遮罩盖住,防旁人窥屏)
   // 相对时间显示的刷新节拍:每 1 分钟走一格,驱动「x 分钟前」重算。
   const [nowTick, setNowTick] = useState(() => Date.now());
   // 详情区两种模式:打开已有条目为只读 preview;新建/点击编辑进入 edit。
@@ -711,6 +713,7 @@ export function VaultPanel({
       // 文件夹以 index 元数据为准(文件夹增删后 doc 内可能已过期)
       setEditFolderId(meta.folderId);
       setMode("preview");
+      setRevealed(false); // 每次打开条目都重新盖上遮罩
       setStatus(null);
     } catch (err) {
       setStatus(t("st_open_fail", String(err)));
@@ -736,6 +739,7 @@ export function VaultPanel({
       setDraftId(null); // 草稿已落库,不再是草稿
       updatePending(v);
       setMode("preview"); // 保存后回到只读预览
+      setRevealed(true); // 内容是用户刚编辑的,无需再遮
       setStatus(result.synced ? t("st_saved", storeName) : t("st_saved_local", storeName, result.syncError ?? ""));
     } catch (err) {
       setStatus(t("st_save_fail", String(err)));
@@ -898,6 +902,7 @@ export function VaultPanel({
   function editEntry() {
     setShowHistory(false);
     setMode("edit");
+    setRevealed(true); // 编辑态内容必然可见;取消/保存回到预览也不再遮
     setStatus(null);
   }
 
@@ -2333,13 +2338,41 @@ export function VaultPanel({
                   </div>
                 ) : (
                   <div {...testId("vault-item-content-card")} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-accent)] px-4 py-3">
-                    <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                      {content ? (
-                        content
-                      ) : (
+                    {!content ? (
+                      <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                         <span className="text-[var(--color-muted-foreground)]">{t("content_empty")}</span>
-                      )}
-                    </div>
+                      </div>
+                    ) : revealed ? (
+                      <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{content}</div>
+                    ) : (
+                      // 渐变遮罩:内容默认盖住(上浅下深渐变 + 提示),整块可点,点击揭开全文
+                      <button
+                        type="button"
+                        {...testId("vault-item-content-veil")}
+                        onClick={() => setRevealed(true)}
+                        aria-label={t("content_reveal")}
+                        className="relative block w-full cursor-pointer text-left"
+                      >
+                        <div
+                          aria-hidden
+                          className="max-h-40 select-none overflow-hidden whitespace-pre-wrap break-words text-sm leading-relaxed"
+                        >
+                          {content}
+                        </div>
+                        <div
+                          className="absolute inset-0 flex items-center justify-center"
+                          style={{
+                            background:
+                              "linear-gradient(to bottom, color-mix(in oklch, var(--color-accent) 55%, transparent), var(--color-accent) 72%)",
+                          }}
+                        >
+                          <span className="flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-muted-foreground)] shadow-sm">
+                            <Eye className="h-3.5 w-3.5" />
+                            {t("content_reveal")}
+                          </span>
+                        </div>
+                      </button>
+                    )}
                   </div>
                 )}
                 {selected ? (
