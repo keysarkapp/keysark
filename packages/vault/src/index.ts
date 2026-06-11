@@ -23,3 +23,4 @@ export {
 } from "./types";
 export { makeCache, memoryKv, type KvStore } from "./cache";
 export { Vault, saveRegistry } from "./vault";
+export { SERVICE_PROVIDERS, providerById, providerForHost, type ServiceProvider } from "./providers";

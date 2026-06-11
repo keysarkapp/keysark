@@ -64,6 +64,7 @@ function normalizeIndex(raw: unknown): IndexDoc {
         ...(e.fileSize !== undefined ? { fileSize: e.fileSize } : {}),
         ...(e.contentHash !== undefined ? { contentHash: e.contentHash } : {}),
         ...(e.versions !== undefined ? { versions: e.versions } : {}),
+        ...(e.provider !== undefined ? { provider: e.provider } : {}),
       }))
     : [];
   return { v: 2, entries, folders };
@@ -194,34 +195,45 @@ export class Vault {
     title: string;
     content: string;
     folderId?: string | null;
+    provider?: string | null; // undefined=保留原值;null/空串=清除;字符串=设置
   }): Promise<{ id: string; entries: EntryMeta[]; synced: boolean; syncError?: string }> {
     const now = Date.now();
     const id = input.id ?? newId();
     const existing = this.index.entries.find((e) => e.id === id);
     const createdAt = existing?.createdAt ?? now;
     const folderId = input.folderId ?? null;
+    const provider =
+      input.provider === undefined ? existing?.provider : input.provider || undefined;
     const contentHash = await sha256Hex(new TextEncoder().encode(input.content));
 
     // 内容去重:与当前版内容相同 → 不写新快照(不动 updatedAt = 不生成新版本)。
     if (existing && existing.contentHash === contentHash) {
-      // 仅 title/folder 变化时更新 index 元数据;内容无变化则完全 no-op。
-      if (existing.title !== input.title || existing.folderId !== folderId) {
+      // 仅 title/folder/provider 变化时更新 index 元数据;内容无变化则完全 no-op。
+      if (
+        existing.title !== input.title ||
+        existing.folderId !== folderId ||
+        existing.provider !== provider
+      ) {
         existing.title = input.title;
         existing.folderId = folderId;
+        if (provider !== undefined) existing.provider = provider;
+        else delete existing.provider;
         const res = await this.persistIndex();
         return { id, entries: this.entries, ...res };
       }
       return { id, entries: this.entries, synced: true };
     }
 
-    const doc: EntryDoc = { id, title: input.title, content: input.content, folderId, createdAt, updatedAt: now, contentHash };
+    const doc: EntryDoc = { id, title: input.title, content: input.content, folderId, createdAt, updatedAt: now, contentHash, ...(provider !== undefined ? { provider } : {}) };
 
     // 写一份新快照 → 版本数 +1(旧数据无 versions 时按已有 1 版计)。
     const versions = (existing ? (existing.versions ?? 1) : 0) + 1;
     const entryEnvelope = await encJson(this.key, doc);
-    const meta: EntryMeta = { id, title: input.title, folderId, createdAt, updatedAt: now, size: entryEnvelope.byteLength, contentHash, versions };
-    if (existing) Object.assign(existing, meta);
-    else this.index.entries.push(meta);
+    const meta: EntryMeta = { id, title: input.title, folderId, createdAt, updatedAt: now, size: entryEnvelope.byteLength, contentHash, versions, ...(provider !== undefined ? { provider } : {}) };
+    if (existing) {
+      Object.assign(existing, meta);
+      if (provider === undefined) delete existing.provider; // input.provider=null 显式清除
+    } else this.index.entries.push(meta);
     const indexEnvelope = await encJson(this.key, this.index);
 
     // 1) 本地优先(标 pending)

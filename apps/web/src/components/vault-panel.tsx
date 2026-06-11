@@ -63,6 +63,7 @@ import {
   Upload,
 } from "lucide-react";
 import { Logo, Wordmark } from "./brand";
+import { ServiceProviderBadge, ServiceProviderIcon, providerDisplay } from "./service-provider";
 import { HeaderControls } from "./controls";
 import { UserMenu } from "./user-menu";
 import { useLocale, useT } from "./providers";
@@ -1541,6 +1542,17 @@ export function VaultPanel({
             className={`h-3.5 w-3.5 shrink-0 ${active ? "" : "text-[var(--color-muted-foreground)]"}`}
           />
           <span className="truncate">{label}</span>
+          {e.provider ? (
+            <Tooltip label={providerDisplay(e.provider).name}>
+              <span
+                className={`ml-auto flex shrink-0 items-center pl-1 ${
+                  active ? "" : "text-[var(--color-muted-foreground)]"
+                }`}
+              >
+                <ServiceProviderIcon provider={e.provider} className="h-3 w-3" />
+              </span>
+            </Tooltip>
+          ) : null}
         </button>
       </div>
     );
@@ -2179,6 +2191,7 @@ export function VaultPanel({
                   <h2 className="min-w-0 flex-1 truncate text-2xl font-bold tracking-tight">
                     {previewName}
                   </h2>
+                  {selected?.provider ? <ServiceProviderBadge provider={selected.provider} /> : null}
                 </div>
                 {showHistory && selected ? (
                   // ---- 历史版本面板(覆盖正文区,冷路径)----
