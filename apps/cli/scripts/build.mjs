@@ -1,10 +1,8 @@
-// CLI 打包:按 build 时环境注入默认 server(生产 → https://keysark.com,否则本地 dev 端口)。
-// 用法:node scripts/build.mjs(NODE_ENV=production 时打生产包)。
+// CLI 打包:注入版本号。默认 server 固定为 https://keysark.com(本地开发用
+// KEYSARK_SERVER / --server 覆盖),不再按 build 环境区分。
 import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 
-const production = process.env.NODE_ENV === "production";
-const defaultServer = production ? "https://keysark.com" : "http://localhost:6134";
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 await build({
@@ -19,8 +17,7 @@ await build({
   },
   outfile: "dist/ark.mjs",
   define: {
-    __KEYSARK_DEFAULT_SERVER__: JSON.stringify(defaultServer),
     __KEYSARK_VERSION__: JSON.stringify(version),
   },
 });
-console.log(`built dist/ark.mjs (${production ? "production" : "development"}, default server ${defaultServer})`);
+console.log(`built dist/ark.mjs (v${version})`);

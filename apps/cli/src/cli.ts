@@ -208,11 +208,10 @@ Unlock (same rules as the web app):
   Argon2id). A correct password unlocks for 15 min (sliding renewal).
 
 Global options (position-independent):
-  --server <url>       API base; default: KEYSARK_SERVER > login state > built-in
-                       (built-in set at build time: prod https://keysark.com, dev localhost)
+  --server <url>       API base; default: KEYSARK_SERVER, else https://keysark.com
   --vault <id|label>   Select vault
 Env:
-  KEYSARK_SERVER     API base (overrides login state and built-in default)
+  KEYSARK_SERVER     API base (overrides the built-in default)
   KEYSARK_MNEMONIC   Mnemonic (skips local credential; for scripts/CI)
   KEYSARK_NO_BROWSER Don't auto-open the browser on login`;
 
@@ -282,7 +281,7 @@ async function main() {
 
     case "status": {
       const cloud = loadCloud();
-      console.log(cloud ? `Login: ${OK} ${cloud.server} ${dim(`(${cloud.provider ?? "?"})`)}` : `Login: ${ERR} ${dim("(run `ark login`)")}`);
+      console.log(cloud ? `Login: ${OK} ${dim(`(${cloud.provider ?? "?"})`)}` : `Login: ${ERR} ${dim("(run `ark login`)")}`);
       console.log(hasCredential() ? `Mnemonic: ${OK} ${dim("imported (encrypted)")}` : `Mnemonic: ${ERR} ${dim("(run `ark import`)")}`);
       return;
     }
@@ -293,13 +292,11 @@ async function main() {
       const sourceLabel = {
         "--server": "--server flag",
         KEYSARK_SERVER: "KEYSARK_SERVER env",
-        "cloud.json": "login state",
         default: "built-in default",
       }[conn.source];
       console.log(`${dim("Version:")} ${cliVersion()}`);
-      console.log(`${dim("Default server:")} ${defaultServer()}`);
       console.log(`${dim("Server:")} ${conn.baseUrl} ${dim(`(${sourceLabel})`)}`);
-      console.log(cloud ? `Login: ${OK} ${cloud.server} ${dim(`(${cloud.provider ?? "?"})`)}` : `Login: ${ERR} ${dim("(run `ark login`)")}`);
+      console.log(cloud ? `Login: ${OK} ${dim(`(${cloud.provider ?? "?"})`)}` : `Login: ${ERR} ${dim("(run `ark login`)")}`);
       console.log(`${dim("Config dir:")} ${keysarkDir()}`);
       return;
     }
@@ -309,7 +306,6 @@ async function main() {
       const server = (
         flagStr(args.flags, "server") ??
         process.env.KEYSARK_SERVER ??
-        loadCloud()?.server ??
         defaultServer()
       ).replace(/\/+$/, "");
 
@@ -365,7 +361,7 @@ async function main() {
           continue;
         }
         if (pd.status === "approved" && pd.token) {
-          saveCloud({ server, token: pd.token, provider: pd.provider });
+          saveCloud({ token: pd.token, provider: pd.provider });
           stop(`${OK} Logged in: ${server} ${dim(`(${pd.provider ?? "?"})`)}`);
           if (!hasCredential()) console.log(dim("  Next: ark import"));
           return;
@@ -385,17 +381,24 @@ async function main() {
         console.log(dim("(not logged in)"));
         return;
       }
+      // 先清本机状态(绝不被网络问题阻塞);远端令牌随后 best-effort 吊销并如实报告。
+      clearCloud();
+      console.log(`${OK} Logged out locally.`);
+      const conn = resolveConn(flagStr(args.flags, "server"));
       try {
-        // best-effort 吊销服务端令牌;失败也照常清本地登录态。
-        await fetch(`${cloud.server}/api/cli/token`, {
+        const res = await fetch(`${conn.baseUrl}/api/cli/token`, {
           method: "DELETE",
           headers: { "x-keysark-token": cloud.token },
+          signal: AbortSignal.timeout(5000),
         });
+        console.log(
+          res.ok
+            ? `${OK} Token revoked at ${conn.baseUrl}.`
+            : dim(`Token not revoked at ${conn.baseUrl} (HTTP ${res.status}); it will expire on its own.`),
+        );
       } catch {
-        /* 服务端不可达,本地仍登出 */
+        console.log(dim(`Could not reach ${conn.baseUrl}; token not revoked (will expire on its own).`));
       }
-      clearCloud();
-      console.log(`${OK} Logged out of ${cloud.server}.`);
       if (hasCredential()) console.log(dim("  Mnemonic credential kept; run `ark forget` to remove."));
       return;
     }

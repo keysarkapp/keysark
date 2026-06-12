@@ -11,7 +11,6 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
-    "build:prod": "NODE_ENV=production node scripts/build.mjs",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit"
   },
