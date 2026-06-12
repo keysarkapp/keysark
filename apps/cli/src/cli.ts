@@ -1,11 +1,11 @@
-// keysark —— 完全独立的命令行客户端:设备码授权登录云端 web 接口,
+// ark(KeysArk CLI)—— 完全独立的命令行客户端:设备码授权登录云端 web 接口,
 // 本地派生主密钥、本地加解密,只把 envelope 密文经云端中转。
 // 明文/助记词/主密钥/解锁密码绝不出 CLI 进程。
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { basename, dirname, relative, resolve } from "node:path";
+import { resolve } from "node:path";
 import { checkVerifier, deriveKey, validateMnemonic } from "@keysark/crypto";
-import { b64decode, providerForHost } from "@keysark/vault";
+import { b64decode } from "@keysark/vault";
 import type { EntryMeta, StorageTransport, Vault, VaultDescriptor } from "@keysark/vault";
 import { cliVersion, clearCloud, defaultServer, keysarkDir, loadCloud, resolveConn, saveCloud } from "./config";
 import { httpTransport } from "./transport";
@@ -18,8 +18,8 @@ import {
   saveCredential,
   writeUnlockCache,
 } from "./credential";
-import { folderPathById, resolveFolderPath } from "./folders";
-import { gitContext } from "./git";
+import { folderPathById, lookupFolderPath, resolveFolderPath } from "./folders";
+import { detectSourceProvider, parseSaveTarget, proposeSaveTarget, targetDisplay } from "./save-target";
 import { fetchVaults, openVault, pickVault } from "./vault-select";
 
 interface Args {
@@ -29,7 +29,7 @@ interface Args {
 }
 
 function parseArgs(argv: string[]): Args {
-  // flag 位置无关:`keysark --server <url> ls` 与 `keysark ls --server <url>` 等价;
+  // flag 位置无关:`ark --server <url> ls` 与 `ark ls --server <url>` 等价;
   // 第一个非 flag 的 token 即子命令。
   const positionals: string[] = [];
   const flags: Record<string, string | boolean> = {};
@@ -71,7 +71,7 @@ async function readStdin(): Promise<string> {
 
 function transportFrom(args: Args): StorageTransport {
   const conn = resolveConn(flagStr(args.flags, "server"));
-  if (!conn.token) fail(`尚未在 ${conn.baseUrl} 登录。先运行 \`keysark login\`。`);
+  if (!conn.token) fail(`尚未在 ${conn.baseUrl} 登录。先运行 \`ark login\`。`);
   return httpTransport(conn.baseUrl, conn.token!);
 }
 
@@ -103,7 +103,7 @@ async function ready(
     fail(
       hasCredential()
         ? "未解锁(密码未通过或非交互环境)。也可设 KEYSARK_MNEMONIC。"
-        : "本机没有助记词。先运行 `keysark import` 导入,或设 KEYSARK_MNEMONIC。",
+        : "本机没有助记词。先运行 `ark import` 导入,或设 KEYSARK_MNEMONIC。",
     );
   }
   if (!validateMnemonic(mnemonic!)) fail("助记词无效(检查 12 词与拼写)。");
@@ -133,31 +133,32 @@ function findEntry(vault: Vault, idArg: string): EntryMeta {
   return matches[0]!;
 }
 
-const HELP = `keysark —— E2E 网盘文本保管库 CLI(独立程序,直连云端)
+const HELP = `ark —— KeysArk E2E 网盘文本保管库 CLI(独立程序,直连云端)
 
 账号:
-  keysark login              设备码授权登录(浏览器完成,可跨机器;server 用默认或 --server)
-  keysark logout             登出:吊销令牌、清本机登录态(已导入的助记词凭据保留)
-  keysark status             显示登录与助记词导入状态
-  keysark info               显示版本、默认/当前 server 及其来源、配置目录
+  ark login              设备码授权登录(浏览器完成,可跨机器;server 用默认或 --server)
+  ark logout             登出:吊销令牌、清本机登录态(已导入的助记词凭据保留)
+  ark status             显示登录与助记词导入状态
+  ark info               显示版本、默认/当前 server 及其来源、配置目录
 
 助记词(只能导入,不能创建;创建请去网页端):
-  keysark import             导入 12 词助记词:在线校验匹配保险库 → 设置解锁密码(本机加密保存)
-  keysark forget             忘记本机助记词(删除加密凭据与解锁缓存)
+  ark import             导入 12 词助记词:在线校验匹配保险库 → 设置解锁密码(本机加密保存)
+  ark forget             忘记本机助记词(删除加密凭据与解锁缓存)
 
 条目:
-  keysark vaults             列出保险库及匹配情况
-  keysark ls                 列出当前保险库的条目
-  keysark get <id>           解密并打印某条目
-  keysark new --title T [--content C] [--folder a/b]   新建条目(无 --content 时读 stdin)
-  keysark set <id> [--title T] [--content C] [--folder a/b]   更新条目
+  ark vaults             列出保险库及匹配情况
+  ark ls                 列出当前保险库的条目
+  ark get <id>           解密并打印某条目
+  ark new --title T [--content C] [--folder a/b]   新建条目(无 --content 时读 stdin)
+  ark set <id> [--title T] [--content C] [--folder a/b]   更新条目
                              --folder 为文件夹路径,缺失层级自动创建;"/" 表示根目录
-  keysark save <file> [--git] [--folder a/b] [--title T]   上传文本文件为条目;默认存根目录、
-                             标题为文件名;同文件夹同标题则更新(写新版本)
-                             --git:按所在仓库 origin 去协议作为文件夹路径
-                             (如 github.com/me/repo),标题为仓库内相对路径
-  keysark rm <id>            删除条目(从索引摘除)
-  keysark sync               重推本地待同步项
+  ark save <source> [target]   上传文本文件为条目;target 形如 a/b/标题(末尾 "/" 表示
+                             文件夹,标题用文件名)。省略 target 时自动推导并询问确认:
+                             git 仓库内 → origin 去协议 + 仓库内相对路径
+                             (如 github.com/me/repo/.env),否则根目录 + 文件名。
+                             目标路径已有条目时,保存为该条目的最新版本
+  ark rm <id>            删除条目(从索引摘除)
+  ark sync               重推本地待同步项
 
 解锁机制(与网页端一致):
   导入时强制设置解锁密码(≥12 位 + ≥3 类字符);助记词经 Argon2id 派生密钥加密存本机。
@@ -216,8 +217,8 @@ async function main() {
 
     case "status": {
       const cloud = loadCloud();
-      console.log(cloud ? `登录:✓ ${cloud.server}(${cloud.provider ?? "?"})` : "登录:✗(keysark login)");
-      console.log(hasCredential() ? "助记词:✓ 已导入(密码加密)" : "助记词:✗(keysark import)");
+      console.log(cloud ? `登录:✓ ${cloud.server}(${cloud.provider ?? "?"})` : "登录:✗(ark login)");
+      console.log(hasCredential() ? "助记词:✓ 已导入(密码加密)" : "助记词:✗(ark import)");
       return;
     }
 
@@ -233,7 +234,7 @@ async function main() {
       console.log(`版本:${cliVersion()}`);
       console.log(`默认 server:${defaultServer()}`);
       console.log(`当前 server:${conn.baseUrl}(来源:${sourceLabel})`);
-      console.log(cloud ? `登录:✓ ${cloud.server}(${cloud.provider ?? "?"})` : "登录:✗(keysark login)");
+      console.log(cloud ? `登录:✓ ${cloud.server}(${cloud.provider ?? "?"})` : "登录:✗(ark login)");
       console.log(`配置目录:${keysarkDir()}`);
       return;
     }
@@ -291,14 +292,14 @@ async function main() {
         if (pd.status === "approved" && pd.token) {
           saveCloud({ server, token: pd.token, provider: pd.provider });
           console.log(`✓ 登录成功:${server}(${pd.provider ?? "?"})。`);
-          if (!hasCredential()) console.log("  下一步:keysark import 导入助记词。");
+          if (!hasCredential()) console.log("  下一步:ark import 导入助记词。");
           return;
         }
         if (pd.status === "denied") fail("授权被网页侧拒绝。");
-        fail("授权已过期或失效,请重新 keysark login。");
+        fail("授权已过期或失效,请重新 ark login。");
       }
       console.log();
-      fail("等待授权超时,请重新 keysark login。");
+      fail("等待授权超时,请重新 ark login。");
       return;
     }
 
@@ -319,7 +320,7 @@ async function main() {
       }
       clearCloud();
       console.log(`✓ 已登出 ${cloud.server}(令牌已吊销)。`);
-      if (hasCredential()) console.log("  本机助记词凭据保留;如需删除运行 keysark forget。");
+      if (hasCredential()) console.log("  本机助记词凭据保留;如需删除运行 ark forget。");
       return;
     }
 
@@ -354,7 +355,7 @@ async function main() {
 
     case "get": {
       const idArg = args.positionals[0];
-      if (!idArg) fail("用法:keysark get <id>");
+      if (!idArg) fail("用法:ark get <id>");
       const { vault } = await ready(args);
       const meta = findEntry(vault, idArg!);
       const doc = await vault.open(meta.id);
@@ -378,11 +379,9 @@ async function main() {
     }
 
     case "save": {
-      const gitRaw = args.flags["git"];
-      let fileArg = args.positionals[0];
-      // parseArgs 会把 `--git ./.env` 里的文件名吃成 --git 的值,这里收回来。
-      if (fileArg === undefined && typeof gitRaw === "string") fileArg = gitRaw;
-      if (!fileArg) fail("用法:keysark save <file> [--git] [--folder a/b] [--title T]");
+      const fileArg = args.positionals[0];
+      const targetArg = args.positionals[1];
+      if (!fileArg) fail("用法:ark save <source> [target](target 形如 a/b/标题,可省略)");
       const abs = resolve(fileArg!);
       let bytes: Buffer;
       try {
@@ -393,40 +392,53 @@ async function main() {
       if (bytes!.includes(0)) fail(`${abs} 是二进制文件,save 目前只支持文本。`);
       const content = bytes!.toString("utf8");
 
-      // 文件夹路径:--folder 优先;--git 时探测所在仓库 origin(去协议);默认根目录。
-      // 标题:--title 优先;--git 命中仓库时用相对仓库根的路径;默认文件名。
-      let folderPath = flagStr(args.flags, "folder");
-      let title = flagStr(args.flags, "title");
-      let provider: string | undefined;
-      if (folderPath === undefined && gitRaw !== undefined) {
-        const git = gitContext(dirname(abs));
-        if (git) {
-          folderPath = git.originPath;
-          title ??= relative(git.repoRoot, abs);
-          // 来源服务:按 origin 域名识别(github/gitlab/…);未识别存原始域名。
-          const host = git.originPath.split("/")[0]!;
-          provider = providerForHost(host)?.id ?? host;
-        } else {
-          console.error("! --git:文件不在 git 仓库内或无 origin,存入根目录。");
-        }
-      }
-      title ??= basename(abs);
+      // 目标:显式 target 直接解析;省略则自动推导(git origin / 根目录)并征求确认。
+      const explicit = targetArg !== undefined;
+      const target = explicit ? parseSaveTarget(targetArg!, abs) : proposeSaveTarget(abs);
+      if (!target) fail(`target 无效:${targetArg}`);
+      // 显式 target 未带出 provider(首段不是已知域名)时,仍按源文件的 git origin 识别。
+      if (target!.provider === undefined) target!.provider = detectSourceProvider(abs);
+      const { folderPath, title, provider } = target!;
 
       const { vault } = await ready(args);
+      // 只查不建:确认前不能动保险库;任一级文件夹缺失即视为目标不存在。
+      const lookedUp = folderPath !== undefined ? lookupFolderPath(vault, folderPath) : null;
+      const existing =
+        lookedUp !== undefined
+          ? vault.entries.find((e) => e.folderId === lookedUp && e.title === title)
+          : undefined;
+
+      const display = targetDisplay(target!);
+      console.log(`源文件:${abs}`);
+      console.log(`目标:${display}${target!.note ? `(${target!.note})` : ""}`);
+      if (existing) {
+        console.log(
+          `目标路径已有条目 [${existing.id.slice(0, 8)}](${existing.versions ?? 1} 个版本),将保存为该条目的最新版本。`,
+        );
+      }
+      if (!explicit) {
+        if (process.stdin.isTTY) {
+          const a = (await promptVisible("确认保存?[Y/n] ")).trim().toLowerCase();
+          if (a && a !== "y" && a !== "yes") {
+            console.log("已取消。");
+            return;
+          }
+        } else {
+          console.log("(非交互环境,自动确认)");
+        }
+      }
+
       const folderId = folderPath !== undefined ? await resolveFolderPath(vault, folderPath) : null;
-      // 同文件夹同标题 → 更新该条目(写新版本);否则新建。
-      const existing = vault.entries.find((e) => e.folderId === folderId && e.title === title);
       const res = await vault.save({ id: existing?.id, title, content, folderId, provider });
-      const where = folderPath ? `${folderPath}/` : "/";
       console.log(
-        `✓ ${existing ? "更新" : "新建"} ${where}${title} [${res.id.slice(0, 8)}]${provider ? ` (${provider})` : ""}${res.synced ? " 已同步" : ` (本地,同步失败:${res.syncError})`}`,
+        `✓ ${existing ? "更新" : "新建"} ${display} [${res.id.slice(0, 8)}]${provider ? ` (${provider})` : ""}${res.synced ? " 已同步" : ` (本地,同步失败:${res.syncError})`}`,
       );
       return;
     }
 
     case "set": {
       const idArg = args.positionals[0];
-      if (!idArg) fail("用法:keysark set <id> [--title T] [--content C] [--folder a/b]");
+      if (!idArg) fail("用法:ark set <id> [--title T] [--content C] [--folder a/b]");
       const { vault } = await ready(args);
       const meta = findEntry(vault, idArg!);
       const cur = await vault.open(meta.id);
@@ -443,7 +455,7 @@ async function main() {
 
     case "rm": {
       const idArg = args.positionals[0];
-      if (!idArg) fail("用法:keysark rm <id>");
+      if (!idArg) fail("用法:ark rm <id>");
       const { vault } = await ready(args);
       const meta = findEntry(vault, idArg!);
       const res = await vault.remove(meta.id);
@@ -459,7 +471,7 @@ async function main() {
     }
 
     default:
-      fail(`未知命令:${args.cmd}\n运行 \`keysark help\` 查看用法。`);
+      fail(`未知命令:${args.cmd}\n运行 \`ark help\` 查看用法。`);
   }
 }
 

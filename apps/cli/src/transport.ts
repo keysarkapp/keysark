@@ -8,7 +8,7 @@ export function httpTransport(baseUrl: string, token: string | null): StorageTra
   async function jsonOrThrow(res: Response, what: string): Promise<unknown> {
     if (res.status === 401) {
       throw new Error(
-        `接口拒绝(401)。本地:桌面是否已运行并完成登录?云端:令牌可能已吊销,重新 \`keysark connect\`。(${what})`,
+        `接口拒绝(401)。令牌可能已吊销或过期,请重新 \`ark login\`。(${what})`,
       );
     }
     if (!res.ok) {

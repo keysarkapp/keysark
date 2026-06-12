@@ -1,4 +1,4 @@
-// 云端连接信息:~/.keysark/cloud.json(`keysark login` 设备码授权写出 { server, token, provider })。
+// 云端连接信息:~/.keysark/cloud.json(`ark login` 设备码授权写出 { server, token, provider })。
 // CLI 是完全独立的程序,直连云端 web 接口;--server / KEYSARK_SERVER 可覆盖服务器地址。
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -35,7 +35,7 @@ export interface CloudConn {
   provider?: string;
 }
 
-/** 读云端登录态(`keysark login` 写出);没有/损坏返回 null。 */
+/** 读云端登录态(`ark login` 写出);没有/损坏返回 null。 */
 export function loadCloud(): CloudConn | null {
   try {
     const cfg = JSON.parse(readFileSync(cloudConfigPath(), "utf8")) as Partial<CloudConn>;

@@ -14,10 +14,10 @@ await build({
   format: "esm",
   target: "node20",
   banner: { js: "#!/usr/bin/env node" },
-  outfile: "dist/keysark.mjs",
+  outfile: "dist/ark.mjs",
   define: {
     __KEYSARK_DEFAULT_SERVER__: JSON.stringify(defaultServer),
     __KEYSARK_VERSION__: JSON.stringify(version),
   },
 });
-console.log(`built dist/keysark.mjs (${production ? "production" : "development"}, default server ${defaultServer})`);
+console.log(`built dist/ark.mjs (${production ? "production" : "development"}, default server ${defaultServer})`);

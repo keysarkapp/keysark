@@ -20,6 +20,21 @@ export function folderPathById(vault: Vault): Map<string, string> {
   return paths;
 }
 
+/** 只查不建:路径每一级都存在则返回 folderId(根目录为 null);任一级缺失返回 undefined。 */
+export function lookupFolderPath(vault: Vault, path: string): string | null | undefined {
+  const segments = path
+    .split("/")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  let parentId: string | null = null;
+  for (const name of segments) {
+    const f = vault.folders.find((x) => x.parentId === parentId && x.name === name);
+    if (!f) return undefined;
+    parentId = f.id;
+  }
+  return parentId;
+}
+
 /**
  * 把 "a/b/c" 文件夹路径解析成 folderId:逐级按 (name, parentId) 匹配已有文件夹,
  * 缺失层级自动创建。空路径 / "/" 表示根目录(返回 null)。
