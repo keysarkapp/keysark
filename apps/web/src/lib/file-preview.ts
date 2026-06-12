@@ -25,21 +25,22 @@ const EXT_MAP: Record<string, PreviewSpec> = {
   txt: { kind: "text", lang: null },
 };
 
-// 取最后一段后缀(小写)。".env" → "env"(dotfile 也能命中)。
+// 取最后一段后缀(小写),先剥掉路径前缀。".env" → "env"(dotfile 也能命中)。
 export function extOf(filename: string): string {
-  const name = filename.toLowerCase();
-  const dot = name.lastIndexOf(".");
+  const base = filename.toLowerCase().split("/").pop() ?? "";
+  const dot = base.lastIndexOf(".");
   if (dot < 0) return "";
-  return name.slice(dot + 1);
+  return base.slice(dot + 1);
 }
 
 export function previewSpecOf(filename: string): PreviewSpec {
-  const name = filename.toLowerCase();
-  // .env / .env.local / .env.production / foo.env 一律按 env(ini)处理
-  if (name === ".env" || name.startsWith(".env.") || name.endsWith(".env")) {
+  // 条目标题可能是带路径的(ark save 存仓库相对路径,如 apps/web/.env.local),按末段判定。
+  const base = filename.toLowerCase().split("/").pop() ?? "";
+  // .env 家族:.env / .env.local / .env.production / foo.env / env.local —— 任一点分段为 env 即命中
+  if (base.split(".").filter(Boolean).includes("env")) {
     return { kind: "code", lang: "ini" };
   }
-  return EXT_MAP[extOf(name)] ?? { kind: "unsupported" };
+  return EXT_MAP[extOf(base)] ?? { kind: "unsupported" };
 }
 
 // 体积分级:先看字节数再决定是否解码/高亮,避免对超大文件做无谓的大字符串分配。

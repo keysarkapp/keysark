@@ -13,7 +13,10 @@ await build({
   platform: "node",
   format: "esm",
   target: "node20",
-  banner: { js: "#!/usr/bin/env node" },
+  banner: {
+    // ESM 产物里给 CJS 依赖(如 inquirer 的 mute-stream)补 require(node 内置模块)能力
+    js: '#!/usr/bin/env node\nimport { createRequire as __createRequire } from "node:module";\nconst require = __createRequire(import.meta.url);',
+  },
   outfile: "dist/ark.mjs",
   define: {
     __KEYSARK_DEFAULT_SERVER__: JSON.stringify(defaultServer),

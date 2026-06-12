@@ -29,6 +29,39 @@ type State =
   | { phase: "plain"; text: string }
   | { phase: "error"; message: string };
 
+/**
+ * 文本条目正文的行内高亮:字符串进、按 lang 高亮(懒加载 hljs);
+ * 失败或超长(>1MB)降级为纯文本。样式贴合条目内容卡(自动换行)。
+ */
+export function InlineHighlight({ text, lang }: { text: string; lang: HighlightLang }) {
+  const [html, setHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHtml(null);
+    if (text.length > HIGHLIGHT_MAX_BYTES) return;
+    (async () => {
+      try {
+        const hljs = (await import("highlight.js/lib/core")).default;
+        if (!hljs.getLanguage(lang)) hljs.registerLanguage(lang, await loadLanguage(lang));
+        const { value } = hljs.highlight(text, { language: lang });
+        if (!cancelled) setHtml(value);
+      } catch {
+        /* 高亮失败保持纯文本 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [text, lang]);
+
+  return (
+    <div className="whitespace-pre-wrap break-words font-mono text-sm leading-relaxed">
+      {html !== null ? <span className="hljs" dangerouslySetInnerHTML={{ __html: html }} /> : text}
+    </div>
+  );
+}
+
 export function CodePreview({ bytes, lang }: { bytes: Uint8Array; lang: HighlightLang | null }) {
   const t = useT();
   const [state, setState] = useState<State>({ phase: "loading" });

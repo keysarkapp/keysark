@@ -2,8 +2,8 @@
 // 本地派生主密钥、本地加解密,只把 envelope 密文经云端中转。
 // 明文/助记词/主密钥/解锁密码绝不出 CLI 进程。
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 import { checkVerifier, deriveKey, sha256Hex, validateMnemonic } from "@keysark/crypto";
 import { b64decode } from "@keysark/vault";
 import type { EntryMeta, StorageTransport, Vault, VaultDescriptor } from "@keysark/vault";
@@ -20,7 +20,7 @@ import {
 import { ERR, OK, bold, cyan, dim, green, red, yellow } from "./colors";
 import { folderPathById, lookupFolderPath, resolveFolderPath } from "./folders";
 import { detectSourceProvider, parseSaveTarget, proposeSaveTarget, targetDisplay } from "./save-target";
-import { askSelect, askText, note, spinner } from "./ui";
+import { askConfirm, askSelect, askText, note, spinner } from "./ui";
 import { fetchVaults, openVault, pickVault } from "./vault-select";
 
 interface Args {
@@ -134,6 +134,44 @@ function findEntry(vault: Vault, idArg: string): EntryMeta {
   return matches[0]!;
 }
 
+/** 按文件路径(a/b/title;末段为标题)找条目;路径中任一级文件夹不存在则视为无匹配。 */
+function findByPath(vault: Vault, path: string): EntryMeta[] {
+  const segs = path
+    .split("/")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (segs.length === 0) return [];
+  const title = segs.pop()!;
+  const folderId = segs.length ? lookupFolderPath(vault, segs.join("/")) : null;
+  if (folderId === undefined) return [];
+  return vault.entries.filter((e) => e.folderId === folderId && e.title === title);
+}
+
+/**
+ * get 的条目定位:优先按路径;无匹配再按 id/前缀回退(兼容旧脚本)。
+ * 路径并非强约束唯一(网页端可建同名),撞名时 TTY 让用户挑,非 TTY 报错列出 id。
+ */
+async function resolveEntryArg(vault: Vault, arg: string): Promise<EntryMeta> {
+  let matches = findByPath(vault, arg);
+  if (matches.length === 0) {
+    matches = vault.entries.filter((e) => e.id === arg || e.id.startsWith(arg));
+  }
+  if (matches.length === 0) fail(`No item at: ${arg}`);
+  if (matches.length === 1) return matches[0]!;
+  if (process.stdin.isTTY && process.stdout.isTTY) {
+    const picked = await askSelect(
+      `${matches.length} items match — pick one`,
+      matches.map((m) => ({
+        value: m.id,
+        label: `${m.title || "(untitled)"}  [${m.id.slice(0, 8)}]`,
+        hint: `updated ${new Date(m.updatedAt).toISOString().slice(0, 16).replace("T", " ")}`,
+      })),
+    );
+    return matches.find((m) => m.id === picked)!;
+  }
+  fail(`Ambiguous path: ${matches.length} items match (${matches.map((m) => m.id.slice(0, 8)).join(", ")})`);
+}
+
 const HELP = `ark — KeysArk end-to-end encrypted vault CLI
 
 Account:
@@ -149,7 +187,11 @@ Mnemonic (import only; create one on the web):
 Items:
   ark vaults             List vaults and key match
   ark ls                 List items
-  ark get <id>           Decrypt and print an item
+  ark get <path> [local]   Decrypt an item by path (a/b/title; id prefix also works).
+                         No local: print to stdout (piped output is content-only).
+                         With local: write the file — asks before overwriting a
+                         different file, skips when identical; a directory keeps
+                         the item's filename
   ark new --title T [--content C] [--folder a/b]   Create item (no --content: reads stdin)
   ark set <id> [--title T] [--content C] [--folder a/b]   Update item
                          --folder is a path; missing levels are created; "/" = root
@@ -388,13 +430,46 @@ async function main() {
     }
 
     case "get": {
-      const idArg = args.positionals[0];
-      if (!idArg) fail("usage: ark get <id>");
+      const pathArg = args.positionals[0];
+      const localArg = args.positionals[1];
+      if (!pathArg) fail("usage: ark get <path> [local-file]");
       const { vault } = await ready(args);
-      const meta = findEntry(vault, idArg!);
+      const meta = await resolveEntryArg(vault, pathArg!);
       const doc = await vault.open(meta.id);
-      console.log(`${bold(`# ${doc.title || "(untitled)"}`)}\n`);
-      console.log(doc.content);
+
+      if (localArg === undefined) {
+        // 无 local:输出 stdout。重定向/管道时只输出正文;TTY 才带标题头。
+        if (process.stdout.isTTY) console.log(`${bold(`# ${doc.title || "(untitled)"}`)}\n`);
+        console.log(doc.content);
+        return;
+      }
+
+      // 写本地文件:目标是已存在的目录 → 取标题末段做文件名。
+      let dest = resolve(localArg);
+      if (existsSync(dest) && statSync(dest).isDirectory()) {
+        dest = join(dest, basename(doc.title || "item.txt"));
+      }
+      if (existsSync(dest)) {
+        const local = readFileSync(dest);
+        if (local.toString("utf8") === doc.content) {
+          console.log(`${OK} ${dest} already up to date.`);
+          return;
+        }
+        // 内容不同 → 必须用户确认;非交互环境拒绝覆盖。
+        if (process.stdin.isTTY && process.stdout.isTTY) {
+          const ok = await askConfirm(
+            `${dest} exists (${local.byteLength} B, differs). Overwrite?`,
+          );
+          if (!ok) {
+            console.log(yellow("Cancelled."));
+            return;
+          }
+        } else {
+          fail(`${dest} exists and differs; refusing to overwrite (non-interactive).`);
+        }
+      }
+      writeFileSync(dest, doc.content);
+      console.log(`${OK} Saved ${bold(dest)} ${dim(`(${Buffer.byteLength(doc.content)} B)`)}`);
       return;
     }
 

@@ -41,6 +41,7 @@ import {
 import { newId } from "@keysark/db/id";
 import {
   ArrowDownUp,
+  ArrowLeft,
   Check,
   ChevronDown,
   ChevronRight,
@@ -62,10 +63,12 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Terminal,
   Trash2,
   Upload,
 } from "lucide-react";
 import { Logo, Wordmark } from "./brand";
+import { CliAccessDialog } from "./cli-access-dialog";
 import { ServiceProviderBadge } from "./service-provider";
 import { HeaderControls } from "./controls";
 import { UserMenu } from "./user-menu";
@@ -90,6 +93,8 @@ import { exportVaultBackupPdf } from "@/lib/vault-pdf";
 import { exportEncryptedBackupHtml } from "@/lib/vault-backup-html";
 import { testId } from "@/lib/test-id";
 import { FilePreview } from "./file-preview/FilePreview";
+import { InlineHighlight } from "./file-preview/CodePreview";
+import { previewSpecOf } from "@/lib/file-preview";
 import { VersionHistory } from "./version-history/VersionHistory";
 import type { StorageProvider } from "@/lib/storage";
 import {
@@ -273,6 +278,7 @@ export function VaultPanel({
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false); // 手动同步进行中(头部按钮转圈用)
   const [revealed, setRevealed] = useState(false); // 预览内容是否已揭开(默认渐变遮罩盖住,防旁人窥屏)
+  const [showCliHowto, setShowCliHowto] = useState(false); // 「通过 CLI 下载」对话框
   // 相对时间显示的刷新节拍:每 1 分钟走一格,驱动「x 分钟前」重算。
   const [nowTick, setNowTick] = useState(() => Date.now());
   // 详情区两种模式:打开已有条目为只读 preview;新建/点击编辑进入 edit。
@@ -1107,7 +1113,21 @@ export function VaultPanel({
       <CenteredShell user={user} provider={provider}>
         <Card {...testId("vault-create")} className="w-full">
           <CardHeader>
-            <CardTitle>{t("create_title")}</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              {vaults.length > 0 ? (
+                <button
+                  type="button"
+                  {...testId("vault-create-back")}
+                  onClick={goPick}
+                  disabled={busy}
+                  aria-label={t("back_to_unlock")}
+                  className="-ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              ) : null}
+              {t("create_title")}
+            </CardTitle>
             <CardDescription>
               {t("create_desc_a")}
               <b>{t("create_desc_strong")}</b>
@@ -1410,7 +1430,34 @@ export function VaultPanel({
       <CenteredShell user={user} provider={provider}>
         <Card {...testId("vault-unlock")} className="w-full">
           <CardHeader>
-            <CardTitle>{t("unlock_title")}</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              {credExists === true && phraseFallback ? (
+                // 从密码解锁切到助记词:返回密码解锁
+                <button
+                  type="button"
+                  {...testId("vault-unlock-back")}
+                  onClick={() => setPhraseFallback(false)}
+                  disabled={busy}
+                  aria-label={t("back_to_password")}
+                  className="-ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              ) : vaults.length > 1 ? (
+                // 多库:返回保险库选择
+                <button
+                  type="button"
+                  {...testId("vault-unlock-back")}
+                  onClick={goPick}
+                  disabled={busy}
+                  aria-label={t("switch_vault")}
+                  className="-ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              ) : null}
+              {t("unlock_title")}
+            </CardTitle>
             <CardDescription>
               {passwordMode
                 ? selectedVault
@@ -1495,6 +1542,17 @@ export function VaultPanel({
                 >
                   {t("forgot_password")}
                 </Button>
+              ) : credExists === true && phraseFallback ? (
+                // 从密码解锁切到助记词后,提供回退入口
+                <Button
+                  {...testId("vault-unlock-back-to-password")}
+                  variant="link"
+                  size="sm"
+                  onClick={() => setPhraseFallback(false)}
+                  disabled={busy}
+                >
+                  {t("back_to_password")}
+                </Button>
               ) : null}
               {vaults.length > 1 ? (
                 <Button variant="link" size="sm" onClick={goPick} disabled={busy}>
@@ -1552,6 +1610,21 @@ export function VaultPanel({
   })();
 
   // 条目的文件夹路径面包屑(根 → "全部条目")。
+  /** 条目在 CLI 里的文件路径:文件夹链(/ 分隔)+ 标题,供 `ark get <path>` 使用。 */
+  function cliPathOf(e: EntryMeta): string {
+    const byId = new Map(folders.map((f) => [f.id, f]));
+    const parts: string[] = [];
+    let cur: string | null = e.folderId;
+    while (cur) {
+      const f = byId.get(cur);
+      if (!f) break;
+      parts.unshift(f.name);
+      cur = f.parentId;
+    }
+    parts.push(e.title || "");
+    return parts.join("/");
+  }
+
   function folderPathOf(folderId: string | null): string {
     const byId = new Map(folders.map((f) => [f.id, f]));
     const parts: string[] = [];
@@ -2174,7 +2247,7 @@ export function VaultPanel({
                   </Button>
                 </div>
               </div>
-              <div {...testId("vault-item-edit-body")} className="mx-auto w-full max-w-[640px] px-6 py-8">
+              <div {...testId("vault-item-edit-body")} className="mx-auto w-full max-w-[1080px] px-6 py-8">
                 <div {...testId("vault-item-header")} className="mb-6 flex items-center gap-4">
                   {itemIcon(title)}
                   <Input
@@ -2290,7 +2363,7 @@ export function VaultPanel({
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-              <div {...testId("vault-item-preview-body")} className="mx-auto w-full max-w-[640px] px-6 py-8">
+              <div {...testId("vault-item-preview-body")} className="mx-auto w-full max-w-[1080px] px-6 py-8">
                 <div {...testId("vault-item-header")} className="mb-6 flex items-center gap-4">
                   {selected?.kind === "file" ? fileIconBox() : itemIcon(previewName)}
                   <h2 className="min-w-0 flex-1 truncate text-2xl font-bold tracking-tight">
@@ -2345,7 +2418,15 @@ export function VaultPanel({
                       </div>
                     ) : revealed ? (
                       <div className="relative">
-                        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{content}</div>
+                        {(() => {
+                          // 按标题(末段文件名)判定语言:.env 家族 / json / yaml 等文本条目带语法高亮
+                          const spec = previewSpecOf(selected?.title ?? "");
+                          return spec.kind === "code" && spec.lang ? (
+                            <InlineHighlight text={content} lang={spec.lang} />
+                          ) : (
+                            <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{content}</div>
+                          );
+                        })()}
                         {/* 揭开后仍可随手再盖上(右上角) */}
                         <Tooltip label={t("content_hide")}>
                           <button
@@ -2397,21 +2478,42 @@ export function VaultPanel({
                         {t("last_edited", new Date(selected.updatedAt).toLocaleString())}
                       </span>
                     </span>
-                    {selectedVault && netdiskUrl(itemRelPath(selectedVault.dir, selected.id, selected.updatedAt)) ? (
-                      <a
-                        href={netdiskUrl(itemRelPath(selectedVault.dir, selected.id, selected.updatedAt))!}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex shrink-0 items-center gap-1 text-[var(--color-primary)] hover:underline"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        {t(
-                          "open_in_netdisk",
-                          t(provider === "google" ? "provider_google" : "provider_baidu"),
-                        )}
-                      </a>
-                    ) : null}
+                    <span className="flex shrink-0 items-center gap-3">
+                      {selected.kind !== "file" ? (
+                        <button
+                          type="button"
+                          {...testId("vault-item-cli-access")}
+                          onClick={() => setShowCliHowto(true)}
+                          className="inline-flex shrink-0 items-center gap-1 text-[var(--color-primary)] hover:underline"
+                        >
+                          <Terminal className="h-3 w-3" />
+                          {t("cli_access")}
+                        </button>
+                      ) : null}
+                      {selectedVault && netdiskUrl(itemRelPath(selectedVault.dir, selected.id, selected.updatedAt)) ? (
+                        <a
+                          href={netdiskUrl(itemRelPath(selectedVault.dir, selected.id, selected.updatedAt))!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex shrink-0 items-center gap-1 text-[var(--color-primary)] hover:underline"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          {t(
+                            "open_in_netdisk",
+                            t(provider === "google" ? "provider_google" : "provider_baidu"),
+                          )}
+                        </a>
+                      ) : null}
+                    </span>
                   </div>
+                ) : null}
+                {selected ? (
+                  <CliAccessDialog
+                    open={showCliHowto}
+                    onOpenChange={setShowCliHowto}
+                    itemPath={cliPathOf(selected)}
+                    title={selected.title || "item.txt"}
+                  />
                 ) : null}
               </div>
             </div>

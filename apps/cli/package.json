@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@clack/prompts": "^1.5.1",
+    "@inquirer/prompts": "^8.5.2",
     "@keysark/crypto": "workspace:*",
     "@keysark/vault": "workspace:*",
     "esbuild": "^0.27.0"
