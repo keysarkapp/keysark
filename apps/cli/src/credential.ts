@@ -8,7 +8,7 @@
 //     使「拷贝整个 ~/.keysark」拿不到该密钥;keystore 不可用时回退到 0600 文件。
 // 助记词/明文绝不进网络;加解密用 @keysark/crypto(与 web 同一套实现)。
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
   DEFAULT_ARGON2ID_PARAMS,
@@ -21,6 +21,7 @@ import {
   type StrengthReason,
 } from "@keysark/crypto";
 import { keysarkDir } from "./config";
+import { ensureSecureDir, writeSecureFile } from "./fsperm";
 import { deleteDeviceKey, loadOrCreateDeviceKey } from "./keystore";
 import { askPassword, log, spinner } from "./ui";
 
@@ -32,7 +33,7 @@ const cachePath = () => join(keysarkDir(), "unlock-cache.json");
 const deviceKeyPath = () => join(keysarkDir(), "device.key");
 
 function ensureDir() {
-  mkdirSync(keysarkDir(), { recursive: true });
+  ensureSecureDir(keysarkDir()); // 目录 0700(POSIX);best-effort,启动守卫复核
 }
 
 let cachedDeviceKey: Buffer | null = null; // 进程内缓存:避免每次缓存读写都 spawn keystore CLI
@@ -82,8 +83,7 @@ export async function saveCredential(mnemonic: string, password: string): Promis
     iv: b64(iv),
     ct: b64(ct),
   };
-  ensureDir();
-  writeFileSync(credentialPath(), JSON.stringify(cred), { mode: 0o600 });
+  writeSecureFile(keysarkDir(), credentialPath(), JSON.stringify(cred));
 }
 
 /** 密码解锁:还原助记词。无凭据或密码错误(GCM 认证失败)都抛错。 */
@@ -122,8 +122,7 @@ export function writeUnlockCache(mnemonic: string): void {
     tag: cipher.getAuthTag().toString("base64"),
     expiresAt: Date.now() + UNLOCK_TTL_MS,
   };
-  ensureDir();
-  writeFileSync(cachePath(), JSON.stringify(cache), { mode: 0o600 });
+  writeSecureFile(keysarkDir(), cachePath(), JSON.stringify(cache));
 }
 
 /** 读解锁缓存:过期返回 null 并删除;命中则滑动续期(再给 15 分钟)。 */

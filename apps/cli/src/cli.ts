@@ -10,6 +10,7 @@ import type { EntryMeta, StorageTransport, Vault, VaultDescriptor } from "@keysa
 import { openLocalSource } from "./local";
 import { renderVaultHtml, type ExportData, type ExportItem } from "./export-html";
 import { cliVersion, clearCloud, defaultServer, keysarkDir, loadCloud, normalizeServer, resolveConn, saveCloud } from "./config";
+import { checkSecurePerms, fixCommands } from "./fsperm";
 import { httpTransport } from "./transport";
 import {
   acquireMnemonic,
@@ -386,6 +387,23 @@ function printHelp(): void {
   }
 }
 
+// ~/.keysark 下的敏感本地文件:启动守卫每次复核并修正权限(目录 0700 / 文件 0600)。
+const SENSITIVE_FILES = ["credential.json", "unlock-cache.json", "cloud.json", "device.key"];
+
+// 每条命令执行前统一加固本地权限;改不动则给出 chmod 命令、要求用户修好后重跑。
+function guardLocalPerms(): void {
+  const dir = keysarkDir();
+  const fails = checkSecurePerms(
+    dir,
+    SENSITIVE_FILES.map((f) => join(dir, f)),
+  );
+  if (fails.length === 0) return;
+  console.error(red(`✗ Insecure permissions under ${dir} and they couldn't be fixed automatically.`));
+  console.error(dim("  Run these, then re-run your command:"));
+  for (const cmd of fixCommands(fails)) console.error(`    ${cyan(cmd)}`);
+  process.exit(1);
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -395,7 +413,11 @@ async function main() {
     case "-h":
       printHelp();
       return;
+  }
 
+  guardLocalPerms(); // help 之外的命令都先复核本地文件权限
+
+  switch (args.cmd) {
     case "import": {
       // 导入助记词:在线校验必须匹配已有保险库(CLI 不能创建)→ 强制设置解锁密码 → 本机加密保存。
       const transport = transportFrom(args);

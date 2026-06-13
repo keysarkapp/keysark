@@ -1,9 +1,10 @@
 // 云端连接信息:~/.keysark/cloud.json(`ark login` 设备码授权写出 { token, provider, issuer })。
 // server 仍按 --server / KEYSARK_SERVER / 内置默认解析,但 token 绑定 issuer(颁发它的 server):
 // 解析出的 server 与 issuer 不一致时拒绝发 token,防止把令牌发往错误/恶意服务端。
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { writeSecureFile } from "./fsperm";
 
 /** 归一化 server URL(去尾部斜杠),用于 issuer 绑定比较。 */
 export function normalizeServer(url: string): string {
@@ -52,8 +53,7 @@ export function loadCloud(): CloudConn | null {
 }
 
 export function saveCloud(c: CloudConn): void {
-  mkdirSync(keysarkDir(), { recursive: true });
-  writeFileSync(cloudConfigPath(), JSON.stringify(c), { mode: 0o600 });
+  writeSecureFile(keysarkDir(), cloudConfigPath(), JSON.stringify(c));
 }
 
 export function clearCloud(): void {
