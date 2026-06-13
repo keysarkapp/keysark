@@ -98,6 +98,7 @@ const zh = {
     "请离线保管本文件:打印或存入加密磁盘。切勿截图、上传云端,或通过聊天、邮件发送。",
   pdf_risk_4: "输入助记词前,务必确认网址与上方一致,谨防钓鱼网站。",
   pdf_generated: (d: string) => `生成时间:${d}`,
+  pdf_source: "源码",
   btn_review_again: "再看一遍助记词",
   // 加密 HTML 备份
   backup_more_options: "更多备份方式",
@@ -466,6 +467,7 @@ const en: typeof zh = {
   pdf_risk_4:
     "Before entering your phrase, make sure the URL matches the one above — beware of phishing.",
   pdf_generated: (d: string) => `Generated: ${d}`,
+  pdf_source: "Source",
   btn_review_again: "Show the phrase again",
   // Encrypted HTML backup
   backup_more_options: "More backup options",

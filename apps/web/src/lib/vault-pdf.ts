@@ -6,6 +6,7 @@
 // 安全:本模块只在浏览器事件回调中调用;mnemonic / url / 库名仅在内存与本地下载的
 // 文件中出现,不发起任何网络请求(符合 E2E 约束 #3)。
 
+import { sourceLabel } from "@/lib/build-info";
 import { translate, type Locale } from "@/lib/i18n";
 
 export type VaultBackupInput = {
@@ -211,11 +212,12 @@ export async function exportVaultBackupPdf(input: VaultBackupInput): Promise<voi
     ry += 16;
   }
 
-  // 页脚:生成时间
+  // 页脚:生成时间 + 源码版本(仓库地址 @ 提交 · 版本;便于核对「这份备份由哪份代码生成」)
   const dateStr = new Date().toLocaleString(locale === "zh" ? "zh-CN" : "en-US");
   ctx.fillStyle = COLOR.muted;
   ctx.font = `400 22px ${SANS}`;
-  ctx.fillText(tr("pdf_generated", dateStr), MARGIN, CANVAS_H - 64);
+  ctx.fillText(tr("pdf_generated", dateStr), MARGIN, CANVAS_H - 96);
+  ctx.fillText(`${tr("pdf_source")}: ${sourceLabel()}`, MARGIN, CANVAS_H - 64, CONTENT_W);
 
   // 转成 PDF 并下载
   const { jsPDF } = await import("jspdf");

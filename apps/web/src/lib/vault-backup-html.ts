@@ -11,6 +11,7 @@ import {
   encrypt,
   generateWrappingSalt,
 } from "@keysark/crypto";
+import { BUILD_COMMIT, BUILD_REPO, BUILD_VERSION, commitUrl } from "@/lib/build-info";
 import { translate, type Locale, type MsgKey } from "@/lib/i18n";
 
 export type EncryptedBackupInput = {
@@ -48,6 +49,7 @@ const STRING_KEYS = [
   "bk_hover_hint",
   "bk_relock",
   "pdf_risk_1",
+  "pdf_source",
 ] as const satisfies readonly MsgKey[];
 
 /** 生成自解密 HTML 字符串(导出供测试;下载入口用 exportEncryptedBackupHtml)。 */
@@ -58,7 +60,9 @@ export async function buildEncryptedBackupHtml(input: EncryptedBackupInput): Pro
   const key = await deriveWrappingKey(input.password, salt, params);
   const { iv, ct } = await encrypt(key, new TextEncoder().encode(input.mnemonic));
 
-  const appVersion = process.env.NEXT_PUBLIC_KEYSARK_VERSION ?? "0.0.0";
+  const appVersion = BUILD_VERSION;
+  const commit = BUILD_COMMIT;
+  const repo = BUILD_REPO;
   const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
   const createdAt = new Date();
   const payload = {
@@ -71,10 +75,21 @@ export async function buildEncryptedBackupHtml(input: EncryptedBackupInput): Pro
     vault: input.vaultName,
     url: input.url,
     appVersion,
+    commit,
+    repo,
     userAgent,
     createdAt: createdAt.toISOString(),
     locale: input.locale,
   };
+
+  // 源码出处:仓库地址 @ 提交;能拼出提交链接时渲染为可点击外链(用户点了才联网,文件本身仍零请求)。
+  const cUrl = commitUrl();
+  const sourceText = repo ? `${repo} @ ${commit}` : commit;
+  const sourceHtml = cUrl
+    ? `<a href="${escapeHtml(cUrl)}" target="_blank" rel="noreferrer noopener" style="color:#818CF8">${escapeHtml(
+        sourceText,
+      )}</a>`
+    : escapeHtml(sourceText);
 
   // 双语文案:两种语言各一份内嵌,文件内可切换。
   const strings: Record<string, Record<string, string>> = {};
@@ -149,7 +164,8 @@ export async function buildEncryptedBackupHtml(input: EncryptedBackupInput): Pro
   <h1 data-t="bk_title"></h1>
   <p class="meta">
     <span data-t="pdf_name_label"></span>:${escapeHtml(input.vaultName)} · <span data-t="pdf_url_label"></span>:${escapeHtml(input.url)}<br>
-    KeysArk v${escapeHtml(appVersion)} · <span id="exported"></span>
+    KeysArk v${escapeHtml(appVersion)} · <span id="exported"></span><br>
+    <span data-t="pdf_source"></span>:${sourceHtml}
   </p>
   <div class="card">
     <div id="form">
