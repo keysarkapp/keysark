@@ -189,6 +189,25 @@ export interface Argon2idParams {
  *  低端设备可能更慢。参数随凭据存储,调高仅影响新封装,老凭据用各自存的参数解。)。 */
 export const DEFAULT_ARGON2ID_PARAMS: Argon2idParams = { m: 524288, t: 4, p: 1 };
 
+/** 可接受的 Argon2id 参数边界:防止被篡改的本地凭据把 m 改到极大 → 解锁 OOM/卡死。
+ *  下限保证仍有意义的成本,上限(m≤1GiB)容纳默认 512MB 又挡住放大攻击。 */
+const ARGON2ID_BOUNDS = {
+  m: { min: 8 * 1024, max: 1024 * 1024 }, // KiB:8MiB ~ 1GiB
+  t: { min: 1, max: 16 },
+  p: { min: 1, max: 4 },
+} as const;
+
+/** 校验 Argon2id 参数在安全范围内;越界即抛(凭据被篡改/损坏)。 */
+export function assertArgon2idParams(params: Argon2idParams): void {
+  for (const k of ["m", "t", "p"] as const) {
+    const v = params[k];
+    const { min, max } = ARGON2ID_BOUNDS[k];
+    if (!Number.isInteger(v) || v < min || v > max) {
+      throw new Error(`Argon2id param ${k}=${v} out of accepted range [${min}, ${max}]`);
+    }
+  }
+}
+
 /** 生成密码包裹用的随机 salt(16 字节,每库独立、绝不复用)。 */
 export function generateWrappingSalt(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(16));
@@ -197,12 +216,14 @@ export function generateWrappingSalt(): Uint8Array {
 /**
  * 解锁密码 → Argon2id → non-extractable AES-256-GCM 包裹密钥。
  * 同 password+salt+params 稳定产出同一 key;密码先 NFKC 归一化,避免同字符不同码点。
+ * 进入前校验 params 边界:被篡改的凭据想用超大 m 触发 OOM/卡死会在此被挡下。
  */
 export async function deriveWrappingKey(
   password: string,
   salt: Uint8Array,
   params: Argon2idParams = DEFAULT_ARGON2ID_PARAMS,
 ): Promise<CryptoKey> {
+  assertArgon2idParams(params);
   const keyBytes = await argon2id({
     password: password.normalize("NFKC"),
     salt,

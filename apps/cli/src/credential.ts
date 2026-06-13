@@ -128,14 +128,17 @@ interface UnlockCache {
 export function writeUnlockCache(mnemonic: string): void {
   const dk = deviceKey();
   if (!dk) return; // 无 keystore → 不缓存(每次都要密码)
+  const expiresAt = Date.now() + UNLOCK_TTL_MS;
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", dk, iv);
+  // expiresAt 作为 AAD 参与认证:本机进程篡改它延长有效期 → 读取时 AAD 不符 → GCM 校验失败。
+  cipher.setAAD(Buffer.from(String(expiresAt), "utf8"));
   const ct = Buffer.concat([cipher.update(mnemonic, "utf8"), cipher.final()]);
   const cache: UnlockCache = {
     iv: iv.toString("base64"),
     ct: ct.toString("base64"),
     tag: cipher.getAuthTag().toString("base64"),
-    expiresAt: Date.now() + UNLOCK_TTL_MS,
+    expiresAt,
   };
   writeSecureFile(keysarkDir(), cachePath(), JSON.stringify(cache));
 }
@@ -155,6 +158,8 @@ export function readUnlockCache(): string | null {
       dk,
       Buffer.from(cache.iv, "base64"),
     );
+    // expiresAt 必须与写入时一致,否则 GCM 认证失败(防延长有效期篡改)。
+    decipher.setAAD(Buffer.from(String(cache.expiresAt), "utf8"));
     decipher.setAuthTag(Buffer.from(cache.tag, "base64"));
     const mnemonic = Buffer.concat([
       decipher.update(Buffer.from(cache.ct, "base64")),

@@ -214,6 +214,9 @@ export function VaultPanel({
   );
 
   const vaultRef = useRef<Vault | null>(null);
+  // 跨 tab 锁定广播:任一 tab lock() → 所有 tab 清内存。lockAllRef 指向最新的 lockLocal 闭包。
+  const lockChannelRef = useRef<BroadcastChannel | null>(null);
+  const lockAllRef = useRef<() => void>(() => {});
   const fileInputRef = useRef<HTMLInputElement>(null);
   // 上传文件时记住目标文件夹(隐藏 input 的 change 回调里取用)。
   const pendingUploadFolder = useRef<string | null>(null);
@@ -413,6 +416,20 @@ export function VaultPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, idleMinutes]);
 
+  // 跨 tab 锁定:任一 tab 锁定(手动/闲置)→ 广播 → 所有 tab 清内存,避免别的 tab 仍能读明文。
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const ch = new BroadcastChannel("keysark-lock");
+    ch.onmessage = (ev) => {
+      if (ev.data === "lock") lockAllRef.current(); // 收到广播只清本地,不再回播(防循环)
+    };
+    lockChannelRef.current = ch;
+    return () => {
+      ch.close();
+      lockChannelRef.current = null;
+    };
+  }, []);
+
   // 每 1 分钟刷新一次「最近同步」的相对时间显示(只在工作台运行)。
   useEffect(() => {
     if (phase !== "unlocked") return;
@@ -569,7 +586,10 @@ export function VaultPanel({
       try {
         await setPassword(v.id, setup.mnemonic, newPw);
       } catch {
-        /* 凭据落库失败(如隐私模式)不阻断进入;下次仍走助记词 */
+        // 凭据无法落库(隐私模式 / IndexedDB 不可用):fail closed,不进库。
+        // 否则用户以为已设密码,实则下次仍只能用助记词。
+        setStatus(t("st_password_save_failed"));
+        return;
       }
       const key = setup.key;
       setSetup(null);
@@ -1059,7 +1079,13 @@ export function VaultPanel({
 
   // 锁定:清内存密钥 + 清工作台状态 + 清所有 secret state,回到选择/解锁界面。
   // 本机加密凭据保留,重新解锁只需输密码(主密钥仅内存,F5/关标签同样需要重输)。
+  // 锁定本 tab + 广播给其它 tab 一起锁;闲置计时器与锁定按钮都走这里。
   function lock() {
+    lockChannelRef.current?.postMessage("lock");
+    lockLocal();
+  }
+  // 只清当前 tab 内存(收到其它 tab 的锁定广播时也走这里,不再回播)。
+  function lockLocal() {
     vaultRef.current = null;
     // 工作台状态
     setContent("");
@@ -1092,6 +1118,8 @@ export function VaultPanel({
     setBkPw2("");
     goPick(); // 另清 mnemonicInput / status,并切回选择/解锁
   }
+  // 每次渲染把 ref 指向最新 lockLocal 闭包,供 BroadcastChannel 处理器调用(避免读到陈旧 vaults)。
+  lockAllRef.current = lockLocal;
 
   // ============================ 选择保险库 ============================
   if (phase === "select") {
