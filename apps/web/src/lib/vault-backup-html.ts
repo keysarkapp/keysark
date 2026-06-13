@@ -55,6 +55,9 @@ const STRING_KEYS = [
   "bk_wrong",
   "bk_offline_note",
   "bk_hover_hint",
+  "bk_copy_hint",
+  "bk_copy_group",
+  "bk_copied",
   "bk_relock",
   "pdf_risk_1",
   "pdf_source",
@@ -152,6 +155,9 @@ export async function buildEncryptedBackupHtml(input: EncryptedBackupInput): Pro
   button.busy::before { content: ""; display: inline-block; width: 14px; height: 14px;
            margin-right: 8px; vertical-align: -2px; border: 2px solid rgba(255,255,255,.35);
            border-top-color: #fff; border-radius: 50%; animation: ks-spin .6s linear infinite; }
+  button.ok { background: #059669; }
+  .copy-groups { display: flex; gap: 8px; }
+  .copy-groups button { flex: 1; margin-top: 12px; font-size: 13px; padding: 8px 6px; }
   button.ghost { margin-top: 16px; background: #1F2937; color: #E5E7EB; border: 1px solid #4B5563; }
   .err { color: #F87171; font-size: 13px; margin-top: 10px; }
   .note { color: #6B7280; font-size: 12px; margin-top: 16px; }
@@ -201,6 +207,8 @@ export async function buildEncryptedBackupHtml(input: EncryptedBackupInput): Pro
       <p style="margin:0;color:#9CA3AF;font-size:13px" data-t="pdf_phrase_label"></p>
       <ol id="words"></ol>
       <p class="hint" data-t="bk_hover_hint"></p>
+      <p class="hint" data-t="bk_copy_hint"></p>
+      <div id="copy-groups" class="copy-groups"></div>
       <p class="risk" data-t="pdf_risk_1"></p>
       <button id="relock" class="ghost" data-t="bk_relock"></button>
     </div>
@@ -226,6 +234,8 @@ export async function buildEncryptedBackupHtml(input: EncryptedBackupInput): Pro
   var msg = document.getElementById("msg"), out = document.getElementById("out");
   var words = document.getElementById("words");
   var form = document.getElementById("form"), relock = document.getElementById("relock");
+  var copyGroups = document.getElementById("copy-groups");
+  var decryptedWords = []; // 解密出的助记词分词;分 3 组复制用;重新锁定时清空
   var msgKey = null; // 当前状态消息的 key,切语言时跟着换
 
   function S() { return STRINGS[lang]; }
@@ -239,6 +249,7 @@ export async function buildEncryptedBackupHtml(input: EncryptedBackupInput): Pro
     document.getElementById("lang-zh").className = lang === "zh" ? "on" : "";
     document.getElementById("lang-en").className = lang === "en" ? "on" : "";
     if (msgKey) msg.textContent = S()[msgKey];
+    renderCopyGroups(); // 分组复制按钮文案随语言重渲染(已解密时才有内容)
     // 出处清单:随语言切换重渲染(标签随语言,技术值不变)。
     var prov = PROV[lang];
     document.getElementById("prov-title").textContent = prov.title;
@@ -279,8 +290,9 @@ export async function buildEncryptedBackupHtml(input: EncryptedBackupInput): Pro
       var key = await crypto.subtle.importKey("raw", keyBytes.slice().buffer, "AES-GCM", false, ["decrypt"]);
       var pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(data.iv).slice().buffer }, key, unb64(data.ct).slice().buffer);
       var mnemonic = new TextDecoder().decode(pt);
+      decryptedWords = mnemonic.split(" ");
       words.innerHTML = "";
-      mnemonic.split(" ").forEach(function (w) {
+      decryptedWords.forEach(function (w) {
         var li = document.createElement("li");
         var span = document.createElement("span");
         span.className = "w";
@@ -288,6 +300,7 @@ export async function buildEncryptedBackupHtml(input: EncryptedBackupInput): Pro
         li.appendChild(span);
         words.appendChild(li);
       });
+      renderCopyGroups();
       // 解密成功:清掉输入框里的密码、隐藏表单,只留助记词区 + 「重新锁定」。
       pw.value = "";
       msgKey = null;
@@ -304,9 +317,62 @@ export async function buildEncryptedBackupHtml(input: EncryptedBackupInput): Pro
   }
   go.addEventListener("click", run);
   pw.addEventListener("keydown", function (e) { if (e.key === "Enter") run(); });
-  // 重新锁定:清掉已解密的单词,回到密码输入(密文从未离开过文件,这里只清 DOM)。
+
+  // 分 3 组复制:整条助记词绝不一次性进剪贴板。组数固定 3,词数(12/24)均分。
+  function labelGroup(btn, a, b) {
+    // a/b 为 1-based 闭区间词号。
+    btn.textContent = S().bk_copy_group.replace("{a}", a).replace("{b}", b);
+  }
+  function legacyCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) { /* 忽略 */ }
+    document.body.removeChild(ta);
+  }
+  function flashCopied(btn, a, b) {
+    btn.textContent = S().bk_copied;
+    btn.classList.add("ok");
+    if (btn._t) clearTimeout(btn._t);
+    btn._t = setTimeout(function () { btn.classList.remove("ok"); labelGroup(btn, a, b); }, 1500);
+  }
+  function renderCopyGroups() {
+    copyGroups.innerHTML = "";
+    var n = decryptedWords.length;
+    if (!n) return;
+    var per = Math.ceil(n / 3);
+    for (var start = 0; start < n; start += per) {
+      (function (start) {
+        var end = Math.min(start + per, n); // [start, end)
+        var btn = document.createElement("button");
+        btn.type = "button";
+        labelGroup(btn, start + 1, end);
+        btn.addEventListener("click", function () {
+          var text = decryptedWords.slice(start, end).join(" ");
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(
+              function () { flashCopied(btn, start + 1, end); },
+              function () { legacyCopy(text); flashCopied(btn, start + 1, end); },
+            );
+          } else {
+            legacyCopy(text);
+            flashCopied(btn, start + 1, end);
+          }
+        });
+        copyGroups.appendChild(btn);
+      })(start);
+    }
+  }
+
+  // 重新锁定:清掉已解密的单词与内存里的助记词,回到密码输入(密文从未离开过文件,这里只清 DOM)。
   relock.addEventListener("click", function () {
     words.innerHTML = "";
+    decryptedWords = [];
+    renderCopyGroups();
     out.hidden = true;
     form.hidden = false;
     msg.hidden = true;
