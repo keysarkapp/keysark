@@ -56,6 +56,6 @@ export async function readBodyLimited(request: Request, max = MAX_UPLOAD_BYTES):
 }
 
 /** PayloadTooLargeError → 413 响应;其它错误重新抛出。 */
-export function tooLargeResponse(): NextResponse {
-  return NextResponse.json({ error: "payload_too_large", max: MAX_UPLOAD_BYTES }, { status: 413 });
+export function tooLargeResponse(max = MAX_UPLOAD_BYTES): NextResponse {
+  return NextResponse.json({ error: "payload_too_large", max }, { status: 413 });
 }

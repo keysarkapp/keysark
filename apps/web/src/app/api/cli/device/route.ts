@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 // 返回网页授权链接。无需登录态 —— 授权动作发生在网页侧。
 export async function POST(request: Request) {
   // 防刷码:每 IP 每分钟最多 10 次发起。
-  const limited = enforceRateLimit(request, { bucket: "cli-device", limit: 10, windowMs: 60_000 });
+  const limited = await enforceRateLimit(request, { bucket: "cli-device", limit: 10, windowMs: 60_000 });
   if (limited) return limited;
 
   const deviceCode = generateDeviceCode();

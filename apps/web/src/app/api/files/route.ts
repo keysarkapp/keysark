@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStorageForRequest } from "@/lib/storage";
+import { getStorageForRequest, sanitizeRelDir, sanitizeRelPath } from "@/lib/storage";
 import {
   PayloadTooLargeError,
   readBodyLimited,
@@ -14,7 +14,8 @@ export async function GET(request: Request) {
   const conn = await getStorageForRequest(request);
   if (!conn) return NextResponse.json({ error: "not_connected" }, { status: 401 });
 
-  const dir = new URL(request.url).searchParams.get("dir") ?? "";
+  const dir = sanitizeRelDir(new URL(request.url).searchParams.get("dir") ?? "");
+  if (dir === null) return NextResponse.json({ error: "bad_path" }, { status: 400 });
   try {
     const files = await conn.client.list(dir);
     return NextResponse.json({ files });
@@ -40,8 +41,8 @@ export async function POST(request: Request) {
     if (err instanceof PayloadTooLargeError) return tooLargeResponse();
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
-  const path = (body.path ?? "").trim();
-  if (!path) return NextResponse.json({ error: "path_required" }, { status: 400 });
+  const path = sanitizeRelPath(body.path ?? null);
+  if (!path) return NextResponse.json({ error: "bad_path" }, { status: 400 });
 
   const bytes = new Uint8Array(Buffer.from(body.contentB64 ?? "", "base64"));
   try {
@@ -58,8 +59,8 @@ export async function DELETE(request: Request) {
   const conn = await getStorageForRequest(request);
   if (!conn) return NextResponse.json({ error: "not_connected" }, { status: 401 });
 
-  const path = (new URL(request.url).searchParams.get("path") ?? "").trim();
-  if (!path) return NextResponse.json({ error: "path_required" }, { status: 400 });
+  const path = sanitizeRelPath(new URL(request.url).searchParams.get("path"));
+  if (!path) return NextResponse.json({ error: "bad_path" }, { status: 400 });
 
   try {
     await conn.client.delete(path);

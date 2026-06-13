@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { newId } from "./id";
 
 // 存储后端授权 token,按 (provider, accountKey) 存。
@@ -56,4 +56,11 @@ export const cliToken = pgTable("cli_token", {
     .notNull()
     .default(sql`now() + interval '90 days'`),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});
+
+/** 全局固定窗口限流桶。用于多实例/serverless 下共享 CLI 授权端点限额。 */
+export const rateLimitBucket = pgTable("rate_limit_bucket", {
+  bucketKey: text("bucket_key").primaryKey(),
+  count: integer("count").notNull().default(0),
+  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
 });

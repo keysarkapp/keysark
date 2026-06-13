@@ -12,6 +12,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "tsx src/cli.ts",
+    "test": "node --import tsx --test src/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

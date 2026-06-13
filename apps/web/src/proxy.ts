@@ -11,7 +11,7 @@ import type { NextRequest } from "next/server";
 
 const isProd = process.env.NODE_ENV === "production";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const nonce = crypto.randomUUID().replace(/-/g, "");
 
   const scriptSrc = isProd

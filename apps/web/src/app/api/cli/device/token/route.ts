@@ -19,7 +19,7 @@ export const runtime = "nodejs";
 // pending → 继续等;不存在/已消费/过期 → 终止轮询。
 export async function POST(request: Request) {
   // 合法轮询约 20 次/分钟;留宽到 120/分钟,挡住高频暴力枚举 device_code。
-  const limited = enforceRateLimit(request, { bucket: "cli-poll", limit: 120, windowMs: 60_000 });
+  const limited = await enforceRateLimit(request, { bucket: "cli-poll", limit: 120, windowMs: 60_000 });
   if (limited) return limited;
 
   let deviceCode = "";
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const body = JSON.parse(new TextDecoder().decode(raw)) as { device_code?: string };
     deviceCode = (body.device_code ?? "").trim();
   } catch (err) {
-    if (err instanceof PayloadTooLargeError) return tooLargeResponse();
+    if (err instanceof PayloadTooLargeError) return tooLargeResponse(MAX_CONTROL_BODY_BYTES);
     /* JSON 解析失败 → 落到下面 400 */
   }
   if (!deviceCode) return NextResponse.json({ error: "device_code_required" }, { status: 400 });

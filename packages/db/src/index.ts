@@ -26,3 +26,4 @@ export {
   type CliTokenListItem,
 } from "./cli-auth";
 export { dbEncryptionEnabled } from "./secret-box";
+export { consumeRateLimit } from "./rate-limit";

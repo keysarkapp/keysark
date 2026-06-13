@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start -p 6134",
     "lint": "eslint src --max-warnings=0",
+    "test": "node --import tsx --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

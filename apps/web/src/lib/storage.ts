@@ -143,13 +143,19 @@ export async function getStorageForRequest(request: Request): Promise<ConnectedS
   return getConnectedStorageByCliToken(request);
 }
 
-/** 归一化沙盒内相对路径:拒绝绝对路径、空段、`.`/`..`(防越界)。非法返回 null。 */
-export function sanitizeRelPath(p: string | null): string | null {
+/** 归一化沙盒内相对路径:拒绝绝对路径、空段、`.`/`..`/控制字符(防越界与歧义路径)。非法返回 null。 */
+export function sanitizeRelPath(p: string | null, opts: { allowEmpty?: boolean } = {}): string | null {
   const t = (p ?? "").trim();
-  if (!t || t.startsWith("/")) return null;
+  if (!t) return opts.allowEmpty ? "" : null;
+  if (t.startsWith("/") || /[\u0000-\u001f\u007f]/.test(t)) return null;
   const segs = t.split("/");
   if (segs.some((s) => s === "" || s === "." || s === "..")) return null;
   return t;
+}
+
+/** 归一化沙盒内相对目录:允许空字符串表示根目录。 */
+export function sanitizeRelDir(p: string | null): string | null {
+  return sanitizeRelPath(p, { allowEmpty: true });
 }
 
 /**

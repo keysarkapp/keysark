@@ -21,7 +21,7 @@ export const runtime = "nodejs";
 // CSRF:会话 cookie 均为 SameSite=Lax,跨站表单 POST 不携带 → 天然拒绝。
 export async function POST(request: Request) {
   // 防暴力枚举 user_code:每 IP 每分钟最多 30 次确认/拒绝。
-  const limited = enforceRateLimit(request, { bucket: "cli-approve", limit: 30, windowMs: 60_000 });
+  const limited = await enforceRateLimit(request, { bucket: "cli-approve", limit: 30, windowMs: 60_000 });
   if (limited) return limited;
 
   // 表单为 application/x-www-form-urlencoded(cli-auth 页);读 body 设小上限后手动解析,
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const raw = await readBodyLimited(request, MAX_CONTROL_BODY_BYTES);
     form = new URLSearchParams(new TextDecoder().decode(raw));
   } catch (err) {
-    if (err instanceof PayloadTooLargeError) return tooLargeResponse();
+    if (err instanceof PayloadTooLargeError) return tooLargeResponse(MAX_CONTROL_BODY_BYTES);
     form = new URLSearchParams();
   }
   const code = normalizeUserCode(form.get("code") ?? "");

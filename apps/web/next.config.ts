@@ -17,7 +17,7 @@ const config: NextConfig = {
     "@keysark/crypto",
     "@keysark/vault",
   ],
-  experimental: { typedRoutes: true },
+  typedRoutes: true,
 };
 
 export default config;
