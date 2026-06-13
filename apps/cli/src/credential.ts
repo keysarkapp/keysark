@@ -178,13 +178,17 @@ export async function promptNewPassword(): Promise<string> {
 /**
  * 取助记词:env > 解锁缓存(15 分钟,滑动续期)> 密码解锁凭据(最多 3 次)。
  * allowPrompt=false 时不交互(脚本场景)。返回 null 表示无可用助记词(应先 import)。
+ * forcePassword=true:跳过解锁缓存、每次都强制输密码,且不写/续期缓存(敏感操作如 get)。
+ *   注:KEYSARK_MNEMONIC 是显式的非交互脚本覆盖,forcePassword 下仍然生效。
  */
-export async function acquireMnemonic(allowPrompt = true): Promise<string | null> {
+export async function acquireMnemonic(allowPrompt = true, forcePassword = false): Promise<string | null> {
   const env = process.env.KEYSARK_MNEMONIC?.trim();
   if (env) return env.replace(/\s+/g, " ");
 
-  const cached = readUnlockCache();
-  if (cached) return cached;
+  if (!forcePassword) {
+    const cached = readUnlockCache();
+    if (cached) return cached;
+  }
 
   if (!hasCredential()) return null;
   if (!allowPrompt || !process.stdin.isTTY) return null;
@@ -198,7 +202,7 @@ export async function acquireMnemonic(allowPrompt = true): Promise<string | null
     try {
       const mnemonic = await unlockCredential(pw);
       sp.stop();
-      writeUnlockCache(mnemonic); // 输对密码 → 15 分钟内免重输
+      if (!forcePassword) writeUnlockCache(mnemonic); // 输对密码 → 15 分钟内免重输;forcePassword 不续期
       return mnemonic;
     } catch {
       sp.stop();

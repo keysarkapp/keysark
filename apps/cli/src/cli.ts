@@ -109,13 +109,15 @@ function tryOpenBrowser(url: string): void {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** 取 (key, vault, transport):env/会话助记词 → 派生 → 匹配保险库。 */
+/** 取 (key, vault, transport):env/会话助记词 → 派生 → 匹配保险库。
+ *  forcePassword=true 跳过解锁缓存、每次强制输密码(敏感操作如 get)。 */
 async function ready(
   args: Args,
   allowPrompt = true,
+  forcePassword = false,
 ): Promise<{ key: CryptoKey; descriptor: VaultDescriptor; vault: Vault; transport: StorageTransport }> {
   const transport = transportFrom(args);
-  const mnemonic = await acquireMnemonic(allowPrompt);
+  const mnemonic = await acquireMnemonic(allowPrompt, forcePassword);
   if (!mnemonic) {
     fail(
       hasCredential()
@@ -335,6 +337,8 @@ Items:
   ark vaults             List vaults and key match
   ark ls                 List items
   ark get <path> [local]   Decrypt an item by path (a/b/title; id prefix also works).
+                         Always prompts for the unlock password (ignores the 15-min
+                         cache); KEYSARK_MNEMONIC still bypasses for scripts.
                          No local: print to stdout (piped output is content-only).
                          With local: write the file — asks before overwriting a
                          different file, skips when identical; a directory keeps
@@ -624,7 +628,8 @@ async function main() {
       const pathArg = args.positionals[0];
       const localArg = args.positionals[1];
       if (!pathArg) fail("usage: ark get <path> [local-file]");
-      const { vault } = await ready(args);
+      // get 是敏感读取:每次都强制输密码,不吃 15 分钟解锁缓存。
+      const { vault } = await ready(args, true, true);
       const meta = await resolveEntryArg(vault, pathArg!);
       const doc = await vault.open(meta.id);
 
