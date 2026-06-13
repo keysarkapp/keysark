@@ -27,10 +27,11 @@ const BUILD: BuildManifest = (() => {
   }
 })();
 
-/** 形如 "https://github.com/org/keysark @ a1b2c3d · v0.0.1";无仓库地址时省略前段。 */
+/** 形如 "https://github.com/org/keysark @ a1b2c3d · ark v1.0.3";无仓库地址时省略前段。
+ *  版本统一用 ark CLI 版本(对外的产品版本号);web 自身的 package.json 版本不对外展示。 */
 export function sourceLabel(): string {
   const left = BUILD_REPO ? `${BUILD_REPO}@${BUILD_COMMIT}` : BUILD_COMMIT;
-  return `${left} · v${BUILD_VERSION}`;
+  return `${left} · ark v${CLI_VERSION}`;
 }
 
 /** 指向具体提交的链接(仅当仓库地址是 http(s) 且提交已知时);否则返回 null。 */
@@ -77,7 +78,14 @@ function runtimeContext(): {
 }
 
 export interface Provenance {
-  app: { version: string; commit: string; repo: string; source: string; commitUrl: string | null };
+  app: {
+    version: string;
+    cliVersion: string;
+    commit: string;
+    repo: string;
+    source: string;
+    commitUrl: string | null;
+  };
   build: { time: string; node: string; deps: Record<string, string> };
   crypto: typeof CRYPTO_SPEC;
   runtime: {
@@ -96,6 +104,7 @@ export function collectProvenance(locale: Locale): Provenance {
   return {
     app: {
       version: BUILD_VERSION,
+      cliVersion: CLI_VERSION,
       commit: BUILD_COMMIT,
       repo: BUILD_REPO,
       source: sourceLabel(),
@@ -117,7 +126,7 @@ export function collectProvenance(locale: Locale): Provenance {
 // 出处清单的展示标签(随导出语言切换;技术值本身保持英文/数字,跨语言通用)。
 interface LabelSet {
   title: string;
-  appVersion: string;
+  cliVersion: string;
   source: string;
   built: string;
   node: string;
@@ -138,7 +147,7 @@ interface LabelSet {
 const LABELS: Record<Locale, LabelSet> = {
   zh: {
     title: "构建环境上下文",
-    appVersion: "应用版本",
+    cliVersion: "ark CLI 版本",
     source: "源码",
     built: "构建时间",
     node: "构建运行时",
@@ -157,7 +166,7 @@ const LABELS: Record<Locale, LabelSet> = {
   },
   en: {
     title: "Build environment context",
-    appVersion: "App version",
+    cliVersion: "ark CLI version",
     source: "Source",
     built: "Built",
     node: "Build runtime",
@@ -195,7 +204,7 @@ export function provenanceRows(locale: Locale): { title: string; rows: Provenanc
     : "n/a";
 
   const rows: ProvenanceRow[] = [
-    { label: L.appVersion, value: `v${p.app.version}` },
+    { label: L.cliVersion, value: `ark v${p.app.cliVersion}` },
     { label: L.source, value: p.app.source },
     { label: L.built, value: builtLocal },
     { label: L.node, value: `Node ${p.build.node || "n/a"}` },
