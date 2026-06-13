@@ -51,6 +51,17 @@ export class VaultRollbackError extends Error {
   }
 }
 
+/** load 检测到远端 index 无法通过解密/AAD/JSON 校验时抛出。 */
+export class VaultIntegrityError extends Error {
+  readonly cause: unknown;
+
+  constructor(cause: unknown) {
+    super(`vault index integrity check failed: ${String(cause)}`);
+    this.name = "VaultIntegrityError";
+    this.cause = cause;
+  }
+}
+
 function emptyIndex(): IndexDoc {
   return { v: 2, entries: [], folders: [], rev: 0 };
 }
@@ -170,36 +181,52 @@ export class Vault {
   }
 
   /**
-   * 解锁后加载:以网盘 index.json 为准,失败则回退本地缓存。
+   * 解锁后加载:以网盘 index.json 为准,网盘不可达则回退本地缓存。
    * 回滚检测:本地非 pending(已同步)且网盘 index rev 低于上次接受的 rev → 抛 VaultRollbackError
    * (恶意/被入侵的存储后端回滚到旧 index)。本地 pending 时跳过(本地领先是合法的)。
+   * 远端 index 若已下载但解密/AAD/JSON 校验失败 → 抛 VaultIntegrityError,不静默回退。
    */
   async load(): Promise<EntryMeta[]> {
+    let idxFile: { id: string; size: number } | undefined;
     try {
       this.fileMap = await this.transport.list(this.dir);
-      const idxFile = this.fileMap.get(INDEX_NAME);
-      if (idxFile) {
-        const bytes = await this.transport.download(this.indexPath());
-        const remote = normalizeIndex(await decJson<unknown>(this.key, bytes, this.idxAad()));
-        await this.assertNoRollback(remote);
-        this.index = remote;
-        this.cache.setIndex(b64encode(bytes), false);
-        return this.entries;
-      }
+      idxFile = this.fileMap.get(INDEX_NAME);
     } catch (err) {
-      if (err instanceof VaultRollbackError) throw err;
       // 网盘不可达 → 用本地缓存(离线可读)
-      const cached = this.cache.getIndex();
-      if (cached) {
-        try {
-          this.index = normalizeIndex(await decJson<unknown>(this.key, b64decode(cached), this.idxAad()));
-        } catch {
-          this.index = emptyIndex();
-        }
-      }
+      return this.loadCachedIndex();
+    }
+    if (!idxFile) {
+      this.index = emptyIndex();
       return this.entries;
     }
-    this.index = emptyIndex();
+    let bytes: Uint8Array;
+    try {
+      bytes = await this.transport.download(this.indexPath());
+    } catch {
+      // index 存在但暂时下载失败(网络/后端错误) → 用本地缓存离线读。
+      return this.loadCachedIndex();
+    }
+    let remote: IndexDoc;
+    try {
+      remote = normalizeIndex(await decJson<unknown>(this.key, bytes, this.idxAad()));
+    } catch (err) {
+      throw new VaultIntegrityError(err);
+    }
+    await this.assertNoRollback(remote);
+    this.index = remote;
+    this.cache.setIndex(b64encode(bytes), false);
+    return this.entries;
+  }
+
+  private async loadCachedIndex(): Promise<EntryMeta[]> {
+    const cached = this.cache.getIndex();
+    if (cached) {
+      try {
+        this.index = normalizeIndex(await decJson<unknown>(this.key, b64decode(cached), this.idxAad()));
+      } catch {
+        this.index = emptyIndex();
+      }
+    }
     return this.entries;
   }
 
@@ -503,13 +530,16 @@ export class Vault {
   }
 
   /**
-   * 删除条目:从 index 摘除 + 清本地缓存,删除 items/<id>/ 子目录下全部版本文件。
-   * 删除失败不阻塞 index 同步(下次手工清理仍可)。
+   * 删除条目:先提交「index 摘除」,成功后再 best-effort 删除 items/<id>/ 子目录下全部版本文件。
+   * 这样即便 index 上传失败,远端旧 index 仍能指向完整版本文件,不会产生悬空引用。
    */
   async remove(id: string): Promise<{ entries: EntryMeta[]; synced: boolean; syncError?: string }> {
     this.index.entries = this.index.entries.filter((e) => e.id !== id);
     this.cache.clearPending(id);
-    // 列出该条目所有版本文件并逐个删除(无保留上限 → 可能多版本)。幂等;失败不影响 index 摘除。
+    const res = await this.persistIndex();
+    if (!res.synced) return { entries: this.entries, ...res };
+
+    // index 已提交成功后再清理历史版本文件。幂等;失败不影响已完成的 index 摘除。
     try {
       const versMap = await this.transport.list(this.versionsDir(id));
       await Promise.allSettled(
@@ -520,7 +550,6 @@ export class Vault {
     } catch {
       /* 列举失败(目录已不在等)→ 跳过,index 摘除仍继续 */
     }
-    const res = await this.persistIndex();
     return { entries: this.entries, ...res };
   }
 

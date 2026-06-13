@@ -75,6 +75,12 @@ function transportFrom(args: Args): StorageTransport {
   if (!conn.token) fail(`Not logged in to ${conn.baseUrl}. Run \`ark login\`.`);
   // token 绑定 issuer:不把它发往别的 server(防发到错误/恶意服务端)。
   if (!conn.tokenUsableHere) {
+    if (!conn.issuer) {
+      fail(
+        `Saved login is from an older KeysArk CLI and is not bound to a server. ` +
+          `Re-run \`ark login\` for ${conn.baseUrl}.`,
+      );
+    }
     fail(
       `Token was issued for ${conn.issuer}, not ${conn.baseUrl}. ` +
         `Re-run \`ark login\` for ${conn.baseUrl}, or target the original server.`,

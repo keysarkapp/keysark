@@ -22,5 +22,5 @@ export {
   type CacheStore,
 } from "./types";
 export { makeCache, memoryKv, type KvStore } from "./cache";
-export { Vault, saveRegistry, VaultRollbackError } from "./vault";
+export { Vault, saveRegistry, VaultIntegrityError, VaultRollbackError } from "./vault";
 export { SERVICE_PROVIDERS, providerById, providerForHost, type ServiceProvider } from "./providers";

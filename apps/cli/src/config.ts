@@ -67,7 +67,7 @@ export interface Conn {
   source: "--server" | "KEYSARK_SERVER" | "default";
   /** 登录态里 token 绑定的 issuer(无登录态 / 旧版无 issuer 则为 null) */
   issuer: string | null;
-  /** token 是否可用于当前 baseUrl(issuer 匹配,或旧版无 issuer 时放行) */
+  /** token 是否可用于当前 baseUrl(必须有 issuer 且匹配;旧版无 issuer 需重新登录) */
   tokenUsableHere: boolean;
 }
 
@@ -76,8 +76,8 @@ export function resolveConn(serverOverride?: string): Conn {
   const cloud = loadCloud();
   const baseUrl = normalizeServer(serverOverride ?? process.env.KEYSARK_SERVER ?? "") || defaultServer();
   const issuer = cloud?.issuer ? normalizeServer(cloud.issuer) : null;
-  // 旧版 cloud.json 无 issuer → 放行(向后兼容);有 issuer 则必须与 baseUrl 一致。
-  const tokenUsableHere = !cloud?.token || issuer === null || issuer === baseUrl;
+  // 旧版 cloud.json 无 issuer 无法证明 token 归属哪个 server → 拒绝发送,要求重新登录。
+  const tokenUsableHere = !cloud?.token || (issuer !== null && issuer === baseUrl);
   return {
     baseUrl,
     token: cloud?.token ?? null,

@@ -257,6 +257,7 @@ export function VaultPanel({
   const [exporting, setExporting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const challengeIdx = useMemo(() => {
+    if (!newMnemonic) return [];
     const idx = new Set<number>();
     while (idx.size < 3) idx.add(Math.floor(Math.random() * 12));
     return [...idx].sort((a, b) => a - b);

@@ -18,6 +18,6 @@
     "@inquirer/prompts": "^8.5.2",
     "@keysark/crypto": "workspace:*",
     "@keysark/vault": "workspace:*",
-    "esbuild": "^0.27.0"
+    "esbuild": "^0.28.1"
   }
 }

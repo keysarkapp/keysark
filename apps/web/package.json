@@ -7,7 +7,7 @@
     "dev": "next dev -p 6134",
     "build": "next build",
     "start": "next start -p 6134",
-    "lint": "next lint",
+    "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -31,6 +31,8 @@
     "@types/markdown-it": "^14.1.2",
     "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.9",
     "tailwindcss": "^4.3.0"
   }
 }

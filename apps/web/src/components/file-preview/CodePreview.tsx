@@ -4,7 +4,6 @@
 // 输入字节来自浏览器内解密,本就要进 DOM,无额外泄露;highlight.js 输出已转义。
 import { useEffect, useState } from "react";
 import { useT } from "../providers";
-import { testId } from "@/lib/test-id";
 import {
   HIGHLIGHT_MAX_BYTES,
   TEXT_MAX_BYTES,
