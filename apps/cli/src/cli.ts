@@ -242,7 +242,11 @@ function manifestHint(cmd: "save" | "get", originPath: string): void {
 async function runSaveManifest(args: Args): Promise<void> {
   const git = gitContext(process.cwd());
   if (!git) {
-    fail("`ark save` with no file must run inside a git repo. Pass a file: `ark save <file>`.");
+    fail(
+      "Not in a git repo — specify a file to save: `ark save <source> [target]`.\n" +
+        "(Batch sync without arguments only works inside a git repo, where the project\n" +
+        " is detected from its origin to find .keysark in the vault.)",
+    );
   }
   const { originPath, repoRoot } = git!;
   const { vault } = await ready(args);
@@ -307,7 +311,11 @@ async function runSaveManifest(args: Args): Promise<void> {
 async function runGetManifest(args: Args): Promise<void> {
   const git = gitContext(process.cwd());
   if (!git) {
-    fail("`ark get` with no path must run inside a git repo. Pass a path: `ark get <path> [local-file]`.");
+    fail(
+      "Not in a git repo — specify a path to get: `ark get <path> [local-file]`.\n" +
+        "(Batch pull without arguments only works inside a git repo, where the project\n" +
+        " is detected from its origin to find .keysark in the vault.)",
+    );
   }
   const { originPath, repoRoot } = git!;
   const force = args.flags.force === true || args.flags.force === "true";
@@ -509,7 +517,10 @@ Items:
   ark get <path> [local]   Decrypt an item by path (a/b/title; id prefix also works).
                          Always prompts for the unlock password (ignores the 5-min
                          cache); KEYSARK_MNEMONIC still bypasses for scripts.
-                         No local: print to stdout (piped output is content-only).
+                         No local: prints to stdout. But when the path belongs to the
+                         git repo you're in (github.com/owner/repo/<rel>), it restores
+                         the file to that repo-relative path instead — so you can omit
+                         the local arg. Pipe/redirect still streams to stdout for scripts.
                          With local: write the file — asks before overwriting a
                          different file, skips when identical; a directory keeps
                          the item's filename
@@ -811,18 +822,40 @@ async function main() {
       }
       // get 是敏感读取:每次都强制输密码,不吃解锁缓存。
       const { vault } = await ready(args, true, true);
-      const meta = await resolveEntryArg(vault, pathArg!);
+
+      // git-origin 感知:路径属于当前所在仓库时,既能解析嵌套条目(标题含 "/"),
+      // 也能在缺省本地目标时,自动把文件还原到仓库内相对路径。
+      const git = gitContext(process.cwd());
+      let inferredRel: string | undefined;
+      let meta: EntryMeta | undefined;
+      if (git && pathArg!.startsWith(`${git.originPath}/`)) {
+        const rel = pathArg!.slice(git.originPath.length + 1);
+        const e = entryAt(vault, lookupFolderPath(vault, git.originPath), rel);
+        if (e) {
+          meta = e;
+          inferredRel = rel;
+        }
+      }
+      if (!meta) meta = await resolveEntryArg(vault, pathArg!);
       const doc = await vault.open(meta.id);
 
-      if (localArg === undefined) {
-        // 无 local:输出 stdout。重定向/管道时只输出正文;TTY 才带标题头。
+      // 本地目标:显式 local 优先;否则若路径属于当前仓库且输出到终端,缺省落到仓库内相对路径
+      //(管道/重定向时仍走 stdout,脚本不受影响)。
+      let dest: string | undefined =
+        localArg !== undefined
+          ? resolve(localArg)
+          : inferredRel && git && process.stdout.isTTY
+            ? join(git.repoRoot, inferredRel)
+            : undefined;
+
+      if (dest === undefined) {
+        // stdout(管道/重定向,或无法从路径推断本地目标)。TTY 才带标题头。
         if (process.stdout.isTTY) console.log(`${bold(`# ${doc.title || "(untitled)"}`)}\n`);
         console.log(doc.content);
         return;
       }
 
-      // 写本地文件:目标是已存在的目录 → 取标题末段做文件名。
-      let dest = resolve(localArg);
+      // 目标是已存在的目录 → 取标题末段做文件名。
       if (existsSync(dest) && statSync(dest).isDirectory()) {
         dest = join(dest, basename(doc.title || "item.txt"));
       }
@@ -845,6 +878,7 @@ async function main() {
           fail(`${dest} exists and differs; refusing to overwrite (non-interactive).`);
         }
       }
+      mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, doc.content);
       console.log(`${OK} Saved ${bold(dest)} ${dim(`(${Buffer.byteLength(doc.content)} B)`)}`);
       return;

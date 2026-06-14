@@ -251,6 +251,18 @@ const zh = {
   cli_home_install_hint: "一行安装,跨平台:",
   cli_home_cta: "查看 CLI 文档",
 
+  // 开发者特性:Git 原生批量同步
+  batch_tag: "面向开发者",
+  batch_title: "git 仓库自动同步",
+  batch_body:
+    "在仓库根放一个 .keysark 清单,逐行写上项目需要同步的密钥文件。之后无需逐个操作——一条命令搞定整个项目。",
+  batch_note:
+    "清单只列路径、不含密钥,可安全提交进仓库。ark save 跳过未改动的文件;ark get 默认不覆盖有差异的本地文件(加 --force 才覆盖)。",
+  batch_file_cmt: "逐行一个要同步的文件",
+  batch_save_cmt: "加密上传全部",
+  batch_get_cmt: "一键拉回本地",
+  batch_sync_label: "加密同步",
+
   // CLI 使用文档页
   docs_nav_back: "返回首页",
   docs_title: "ark CLI 使用文档",
@@ -660,6 +672,18 @@ const en: typeof zh = {
     "ark is the KeysArk command-line client. Log in and import your phrase, then read and write your vault from the terminal — pull .env files, API keys and configs in and out. Just like the web app, all encryption and decryption happen on your device; the cloud only ever sees ciphertext. Built for developers and scripts / CI.",
   cli_home_install_hint: "One line, cross-platform:",
   cli_home_cta: "Read the CLI docs",
+
+  // Developer feature: Git-native batch sync
+  batch_tag: "For developers",
+  batch_title: "Automatic sync for git repos",
+  batch_body:
+    "Drop a .keysark manifest at your repo root, listing the secret files the project needs. No more file-by-file — one command syncs the whole project.",
+  batch_note:
+    "The manifest lists paths only (no secrets), so it's safe to commit. ark save skips unchanged files; ark get won't overwrite differing local files unless you pass --force.",
+  batch_file_cmt: "one file to sync per line",
+  batch_save_cmt: "push every listed file",
+  batch_get_cmt: "pull them all back",
+  batch_sync_label: "encrypted",
 
   // CLI documentation page
   docs_nav_back: "Back to home",

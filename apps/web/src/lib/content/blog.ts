@@ -17,6 +17,104 @@ export interface BlogPost {
 // 新到旧。
 export const POSTS: BlogPost[] = [
   {
+    slug: "git-native-secret-sync",
+    date: "2026-06-14",
+    en: {
+      title: "Git-native secret sync: one .keysark file for the whole team",
+      description:
+        "Declare the secrets a repo needs in a .keysark manifest, then `ark save` / `ark get` sync them all — encrypted end-to-end, stored in your own cloud drive.",
+      body: [
+        {
+          k: "p",
+          t: "Every project has files that can't go in git: `.env`, service-account keys, signing configs. Sharing them safely — across teammates, machines, and CI — is the chore nobody enjoys. KeysArk's CLI now turns it into two commands.",
+        },
+        { k: "h2", t: "Declare it once, in the repo" },
+        {
+          k: "p",
+          t: "Add a `.keysark` file at the repo root listing the secret files to sync, one repo-relative path per line:",
+        },
+        {
+          k: "code",
+          t: "# .keysark — one repo-relative path per line\n.env\n.env.production\nconfig/app.secret.json",
+        },
+        {
+          k: "p",
+          t: "It lists paths, not secrets, so it is safe to commit. Now the whole team shares one source of truth for which files matter — and the actual contents stay gitignored.",
+        },
+        { k: "h2", t: "Push and pull, the whole project at once" },
+        {
+          k: "p",
+          t: "Inside the repo, `ark save` reads the manifest, encrypts every listed file in your browser-grade crypto, and uploads the ciphertext. `ark get` does the reverse:",
+        },
+        {
+          k: "code",
+          t: "ark save .keysark   # define the manifest in the vault (once)\n\nark save            # encrypt & upload every listed file\nark get             # pull them all back",
+        },
+        {
+          k: "p",
+          t: "The killer moment is onboarding: clone a fresh machine, run `ark get`, and every `.env` lands in its right place. `ark save` skips files that haven't changed; `ark get` won't clobber local files that differ unless you pass `--force`.",
+        },
+        { k: "h2", t: "Targets you don't have to type" },
+        {
+          k: "p",
+          t: "Because the vault path is derived from your git origin, a file maps to `github.com/owner/repo/<path>` automatically. So even one-offs are terse: from inside the repo, `ark get github.com/owner/repo/.env` restores `.env` to its place — no second argument needed. Pipes still work: redirect and it streams to stdout instead.",
+        },
+        { k: "h2", t: "Still zero-knowledge" },
+        {
+          k: "p",
+          t: "Nothing about this weakens the model. The manifest only names files; the contents are encrypted on your device with your recovery phrase, and the server and your cloud drive only ever see ciphertext. Convenience for developers, with the same guarantees.",
+        },
+      ],
+    },
+    zh: {
+      title: "Git 原生的密钥同步:一个 .keysark 管好整个团队",
+      description:
+        "在 .keysark 清单里声明项目需要的密钥文件,然后 ark save / ark get 一键同步全部——端到端加密,存进你自己的云盘。",
+      body: [
+        {
+          k: "p",
+          t: "每个项目都有不能进 git 的文件:`.env`、服务账号密钥、签名配置。要在队友、机器、CI 之间安全地共享它们,是谁都不爱干的杂活。KeysArk 的命令行现在把它变成两条命令。",
+        },
+        { k: "h2", t: "在仓库里声明一次" },
+        {
+          k: "p",
+          t: "在仓库根放一个 `.keysark`,逐行列出要同步的密钥文件(仓库内相对路径):",
+        },
+        {
+          k: "code",
+          t: "# .keysark —— 每行一个仓库内相对路径\n.env\n.env.production\nconfig/app.secret.json",
+        },
+        {
+          k: "p",
+          t: "它只列路径、不含密钥,可以安全地提交进仓库。于是整个团队对「哪些文件要紧」有了同一份事实来源——而文件内容本身仍然 gitignore。",
+        },
+        { k: "h2", t: "一键推、一键拉,整个项目" },
+        {
+          k: "p",
+          t: "在仓库里,`ark save` 读取清单,把每个列出的文件加密后上传密文;`ark get` 则反向拉回:",
+        },
+        {
+          k: "code",
+          t: "ark save .keysark   # 先把清单本身存上云端(一次)\n\nark save            # 加密并上传清单里的全部文件\nark get             # 一键全部拉回本地",
+        },
+        {
+          k: "p",
+          t: "最爽的一刻是新人上手:新机器 clone 下来,跑一句 `ark get`,所有 `.env` 各就各位。`ark save` 会跳过没改动的文件;`ark get` 默认不覆盖内容不同的本地文件,除非加 `--force`。",
+        },
+        { k: "h2", t: "目标路径不用你手敲" },
+        {
+          k: "p",
+          t: "因为云端路径由 git origin 推导,文件会自动映射到 `github.com/owner/repo/<路径>`。所以连单文件操作也很简洁:在仓库里 `ark get github.com/owner/repo/.env` 就会把 `.env` 还原到原位——不用再写第二个参数。管道照常:重定向时它会改走 stdout。",
+        },
+        { k: "h2", t: "依然是零知识" },
+        {
+          k: "p",
+          t: "这一切都不削弱安全模型。清单只写文件名;内容在你的设备上用助记词加密,服务端与你的云盘始终只见密文。给开发者的便利,保证一分不少。",
+        },
+      ],
+    },
+  },
+  {
     slug: "the-name-keysark",
     date: "2026-06-02",
     en: {

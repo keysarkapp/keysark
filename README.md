@@ -85,6 +85,28 @@ ark save .env             # encrypt & upload a file (target auto-detected from g
 
 The CLI mirrors the web app's security model: your mnemonic is stored locally, wrapped with an unlock password using **Argon2id** (512 MB / t=4 / p=1). Plaintext and the master key never leave your machine, and `KEYSARK_MNEMONIC` lets scripts/CI run non-interactively. Run `ark help` for the full command list (`login`, `logout`, `status`, `info`, `import`, `forget`, `vaults`, `ls`, `get`, `new`, `set`, `save`, `rm`, `sync`, `local`).
 
+### Git-native batch sync (`.keysark`)
+
+For projects, declare the secret files a repo needs in a **`.keysark`** manifest at the repo root — one repo-relative path per line. It lists *paths only, no secrets*, so it's safe to commit:
+
+```
+# .keysark
+.env
+.env.production
+config/app.secret.json
+```
+
+Then sync the whole project with no per-file arguments:
+
+```bash
+ark save .keysark   # store the manifest in the vault (once)
+
+ark save            # encrypt & upload every file listed in .keysark
+ark get             # pull them all back (e.g. on a fresh clone)
+```
+
+Run inside a git repo, the target path is derived from your git origin (`github.com/owner/repo/<path>`), so individual files are terse too — `ark get github.com/owner/repo/.env` restores `.env` to its place, no second argument needed (pipes/redirects still stream to stdout). `ark save` skips unchanged files; `ark get` won't overwrite local files that differ unless you pass `--force`.
+
 ### Offline / local decryption
 
 ```bash

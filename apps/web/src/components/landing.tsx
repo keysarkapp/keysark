@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Binary,
   CloudUpload,
+  FileText,
   GitBranch,
   KeyRound,
   LockKeyhole,
@@ -14,8 +15,9 @@ import {
   Terminal,
   type LucideIcon,
 } from "lucide-react";
-import { Fragment } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Wordmark } from "./brand";
+import { AndroidMark, AppleMark, LinuxMark, WindowsMark } from "./platform-marks";
 import { DocsButton, HeaderControls, RepoButton } from "./controls";
 import { useLocale } from "./providers";
 import { BUILD_REPO, CLI_VERSION } from "@/lib/build-info";
@@ -36,6 +38,75 @@ const HOW_STEPS: { id: string; title: MsgKey; body: MsgKey; icon: LucideIcon }[]
   { id: "derive", title: "how_s2_title", body: "how_s2_body", icon: Binary },
   { id: "encrypt", title: "how_s3_title", body: "how_s3_body", icon: LockKeyhole },
 ];
+
+// 全平台客户端:CLI 已上线(点进文档安装页);其余为占位,hover 满 1 秒提示 TODO。
+type PlatformIcon = (props: { className?: string }) => React.ReactNode;
+const PLATFORMS: { id: string; label: string; icon: PlatformIcon }[] = [
+  { id: "cli", label: "CLI", icon: Terminal },
+  { id: "ios", label: "iOS", icon: AppleMark },
+  { id: "android", label: "Android", icon: AndroidMark },
+  { id: "macos", label: "macOS", icon: AppleMark },
+  { id: "windows", label: "Windows", icon: WindowsMark },
+  { id: "linux", label: "Linux", icon: LinuxMark },
+];
+
+const PLATFORM_BASE =
+  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors";
+
+/** 平台徽标:有 href 即 CLI,可点击进文档;否则占位,hover 满 1 秒浮出 TODO。 */
+function PlatformBadge({
+  label,
+  icon: Icon,
+  href,
+}: {
+  label: string;
+  icon: PlatformIcon;
+  href?: string;
+}) {
+  const [showTip, setShowTip] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => clearTimeout(timer.current ?? undefined), []);
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        {...testId("landing-platform-cli")}
+        className={`${PLATFORM_BASE} border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-foreground)] shadow-sm hover:border-[var(--color-primary)]/50 hover:text-[var(--color-primary)]`}
+      >
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </a>
+    );
+  }
+
+  const open = () => {
+    timer.current = setTimeout(() => setShowTip(true), 1000);
+  };
+  const close = () => {
+    clearTimeout(timer.current ?? undefined);
+    setShowTip(false);
+  };
+  return (
+    <span className="relative inline-flex" onMouseEnter={open} onMouseLeave={close} onFocus={open} onBlur={close}>
+      <span
+        aria-disabled="true"
+        className={`${PLATFORM_BASE} cursor-default border-dashed border-[var(--color-border)] text-[var(--color-muted-foreground)]/70`}
+      >
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </span>
+      {showTip ? (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-[var(--color-foreground)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-background)] shadow"
+        >
+          TODO
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 export function Landing({ error, providers }: { error?: string; providers: ProviderFlags }) {
   const { t, locale } = useLocale();
@@ -142,6 +213,21 @@ export function Landing({ error, providers }: { error?: string; providers: Provi
                   {t("cta_secondary")}
                 </Button>
               </a>
+            </div>
+
+            {/* 全平台客户端:CLI 已上线,其余开发中 */}
+            <div
+              {...testId("landing-platforms")}
+              className="mt-8 flex flex-wrap items-center justify-center gap-2"
+            >
+              {PLATFORMS.map((p) => (
+                <PlatformBadge
+                  key={p.id}
+                  label={p.label}
+                  icon={p.icon}
+                  href={p.id === "cli" ? `${docsHref}#install` : undefined}
+                />
+              ))}
             </div>
             {errMsg ? <p className="mt-6 text-sm text-[var(--color-danger)]">{errMsg}</p> : null}
           </div>
@@ -262,18 +348,17 @@ export function Landing({ error, providers }: { error?: string; providers: Provi
           </div>
         </section>
 
-        {/* 命令行客户端介绍 */}
+        {/* 命令行 + 面向开发者(合并为一个 Block,左右布局,中间无分隔线) */}
         <section {...testId("landing-cli")} className="border-t border-[var(--color-border)]">
           <div {...testId("landing-cli-inner")} className="mx-auto w-full max-w-6xl px-6 py-16">
+            {/* 命令行:左=文案,右=终端 */}
             <div className="grid items-center gap-10 lg:grid-cols-2">
               <div {...testId("landing-cli-copy")}>
                 <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/80 px-4 py-1.5 text-xs font-medium text-[var(--color-primary)] shadow-sm backdrop-blur">
                   <Terminal className="h-3.5 w-3.5" />
                   {t("cli_home_tag")}
                 </span>
-                <h2 className="mt-5 text-3xl font-bold tracking-tight sm:text-4xl">
-                  {t("cli_home_title")}
-                </h2>
+                <h2 className="mt-5 text-3xl font-bold tracking-tight sm:text-4xl">{t("cli_home_title")}</h2>
                 <p className="mt-4 max-w-xl text-[var(--color-muted-foreground)] leading-relaxed">
                   {t("cli_home_body")}
                 </p>
@@ -287,7 +372,6 @@ export function Landing({ error, providers }: { error?: string; providers: Provi
                 </div>
               </div>
 
-              {/* 终端示意:install + 三步常用命令 */}
               <div
                 {...testId("landing-cli-terminal")}
                 className="overflow-hidden rounded-[calc(var(--radius)+0.5rem)] border border-[var(--color-border)] bg-[var(--color-surface-2)]/80 shadow-sm backdrop-blur"
@@ -314,6 +398,71 @@ export function Landing({ error, providers }: { error?: string; providers: Provi
                   <p className="mt-3">
                     <span className="text-[var(--color-success)]">$</span> ark get github.com/me/app/.env .env
                   </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 面向开发者:左=文案,右=.keysark → 命令(同一 Block,无分隔线) */}
+            <div {...testId("landing-batch")} className="mt-16 grid items-center gap-10 lg:grid-cols-2">
+              <div>
+                <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/80 px-4 py-1.5 text-xs font-medium text-[var(--color-primary)] shadow-sm backdrop-blur">
+                  <GitBranch className="h-3.5 w-3.5" />
+                  {t("batch_tag")}
+                </span>
+                <h2 className="mt-5 text-3xl font-bold tracking-tight sm:text-4xl">{t("batch_title")}</h2>
+                <p className="mt-4 max-w-xl text-[var(--color-muted-foreground)] leading-relaxed">
+                  {t("batch_body")}
+                </p>
+                <p className="mt-4 max-w-xl text-sm text-[var(--color-muted-foreground)] leading-relaxed">
+                  {t("batch_note")}
+                </p>
+              </div>
+
+              {/* 右栏:.keysark 清单 → 加密 → 命令(纵向堆叠) */}
+              <div {...testId("landing-batch-diagram")} className="flex flex-col gap-3">
+                <div
+                  {...testId("landing-batch-manifest")}
+                  className="overflow-hidden rounded-[calc(var(--radius)+0.5rem)] border border-[var(--color-border)] bg-[var(--color-surface-2)]/80 shadow-sm backdrop-blur"
+                >
+                  <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-3 text-xs font-medium text-[var(--color-muted-foreground)]">
+                    <FileText className="h-3.5 w-3.5 text-[var(--color-primary)]" aria-hidden="true" />
+                    .keysark
+                  </div>
+                  <div className="px-4 py-4 font-mono text-xs leading-relaxed">
+                    <p className="text-[var(--color-muted-foreground)]"># {t("batch_file_cmt")}</p>
+                    <p>.env</p>
+                    <p>.env.production</p>
+                    <p>config/app.secret.json</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center gap-2">
+                  <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted-foreground)]">
+                    {t("batch_sync_label")}
+                  </span>
+                  <ArrowRight className="h-5 w-5 rotate-90 text-[var(--color-muted-foreground)]" aria-hidden="true" />
+                </div>
+
+                <div
+                  {...testId("landing-batch-terminal")}
+                  className="overflow-hidden rounded-[calc(var(--radius)+0.5rem)] border border-[var(--color-border)] bg-[var(--color-surface-2)]/80 shadow-sm backdrop-blur"
+                >
+                  <div className="flex items-center gap-1.5 border-b border-[var(--color-border)] px-4 py-3">
+                    <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-danger)]/60" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-warning,#f59e0b)]/60" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-success)]/60" />
+                    <span className="ml-2 font-mono text-xs text-[var(--color-muted-foreground)]">ark</span>
+                  </div>
+                  <div className="px-4 py-4 font-mono text-xs leading-relaxed">
+                    <p>
+                      <span className="text-[var(--color-success)]">$</span> ark save{" "}
+                      <span className="text-[var(--color-muted-foreground)]"># {t("batch_save_cmt")}</span>
+                    </p>
+                    <p className="mt-2">
+                      <span className="text-[var(--color-success)]">$</span> ark get{" "}
+                      <span className="text-[var(--color-muted-foreground)]"># {t("batch_get_cmt")}</span>
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
