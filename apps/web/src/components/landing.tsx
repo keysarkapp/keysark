@@ -20,7 +20,7 @@ import { Wordmark } from "./brand";
 import { AndroidMark, AppleMark, LinuxMark, WindowsMark } from "./platform-marks";
 import { DocsButton, HeaderControls, RepoButton } from "./controls";
 import { useLocale } from "./providers";
-import { BUILD_REPO, CLI_VERSION } from "@/lib/build-info";
+import { BUILD_REPO } from "@/lib/build-info";
 import { localeHref, type MsgKey } from "@/lib/i18n";
 import { storageLabel, type ProviderFlags } from "@/lib/providers";
 import { testId } from "@/lib/test-id";
@@ -91,7 +91,7 @@ function PlatformBadge({
     <span className="relative inline-flex" onMouseEnter={open} onMouseLeave={close} onFocus={open} onBlur={close}>
       <span
         aria-disabled="true"
-        className={`${PLATFORM_BASE} cursor-default border-dashed border-[var(--color-border)] text-[var(--color-muted-foreground)]/70`}
+        className={`${PLATFORM_BASE} cursor-default border-dashed border-[var(--color-border)]/60 text-[var(--color-muted-foreground)] opacity-50 grayscale`}
       >
         <Icon className="h-3.5 w-3.5" />
         {label}
@@ -381,7 +381,7 @@ export function Landing({ error, providers }: { error?: string; providers: Provi
                   <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-warning,#f59e0b)]/60" />
                   <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-success)]/60" />
                   <span className="ml-2 font-mono text-xs text-[var(--color-muted-foreground)]">
-                    ark v{CLI_VERSION}
+                    ark
                   </span>
                 </div>
                 <div className="px-4 py-4 font-mono text-xs leading-relaxed">

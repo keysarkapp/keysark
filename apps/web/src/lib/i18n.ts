@@ -343,10 +343,13 @@ const zh = {
   rename: "重命名",
   delete: "删除",
   folder_sync_action: "同步设置",
-  folder_sync_title: (name: string) => `文件夹同步:${name || "(未命名)"}`,
   folder_sync_desc:
     "逐行写上要同步的文件(仓库内相对路径)。在与该文件夹同名(git origin)的仓库里执行 ark save 会把这些文件加密上传,ark get 会拉回本地。清单只存在 vault 里,不会落到你的代码仓库。",
   folder_sync_ph: ".env\n.env.production\nconfig/app.secret.json",
+  folder_sync_empty: "还没有同步清单 —— 点「编辑」添加要同步的文件。",
+  folder_sync_count: (n: number) => `${n} 个文件`,
+  folder_stat: (items: number, subs: number) => `${items} 个条目 · ${subs} 个子文件夹`,
+  folder_created: (d: string) => `创建于 ${d}`,
   confirm_delete_folder: (name: string) =>
     `删除文件夹「${name}」?其中的条目与子文件夹会移动到上级目录。`,
   delete_item_title: "删除条目",
@@ -771,10 +774,13 @@ const en: typeof zh = {
   rename: "Rename",
   delete: "Delete",
   folder_sync_action: "Sync settings",
-  folder_sync_title: (name: string) => `Folder sync: ${name || "(untitled)"}`,
   folder_sync_desc:
     "List the files to sync, one repo-relative path per line. In the repo whose git origin matches this folder, `ark save` uploads them encrypted and `ark get` pulls them back. The list lives only in your vault — never in your code repo.",
   folder_sync_ph: ".env\n.env.production\nconfig/app.secret.json",
+  folder_sync_empty: "No sync list yet — hit Edit to add files to sync.",
+  folder_sync_count: (n: number) => `${n} file${n === 1 ? "" : "s"}`,
+  folder_stat: (items: number, subs: number) => `${items} items · ${subs} subfolders`,
+  folder_created: (d: string) => `Created ${d}`,
   confirm_delete_folder: (name: string) =>
     `Delete folder "${name}"? Its items and subfolders will move to the parent.`,
   delete_item_title: "Delete item",

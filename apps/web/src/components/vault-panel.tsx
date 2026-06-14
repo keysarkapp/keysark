@@ -249,9 +249,6 @@ export function VaultPanel({
   const [idleMinutes, setIdleMinutes] = useState(loadIdleMinutes);
   const [showAutoLock, setShowAutoLock] = useState(false);
   const [idleCustom, setIdleCustom] = useState("");
-  // 文件夹同步设置:正在编辑的文件夹 + 多行清单文本(每行一个仓库内相对路径)。
-  const [syncFolder, setSyncFolder] = useState<FolderMeta | null>(null);
-  const [syncText, setSyncText] = useState("");
 
   // 创建流程
   const [newLabel, setNewLabel] = useState("");
@@ -360,6 +357,20 @@ export function VaultPanel({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  // 文件夹详情页:重命名 / 同步清单编辑态 + 草稿(由名称右侧的 … 菜单触发)。
+  const [folderRenaming, setFolderRenaming] = useState(false);
+  const [folderNameDraft, setFolderNameDraft] = useState("");
+  const [folderSyncEditing, setFolderSyncEditing] = useState(false);
+  const [folderSyncDraft, setFolderSyncDraft] = useState("");
+  // 切换文件夹 / 文件夹数据变化(保存成功)时:退出编辑态,草稿回填为最新值。
+  // 必须放在所有提前 return 之前,保证每次渲染 Hook 顺序一致。
+  useEffect(() => {
+    const f = nav.kind === "folder" ? folders.find((x) => x.id === nav.id) : null;
+    setFolderRenaming(false);
+    setFolderNameDraft(f?.name ?? "");
+    setFolderSyncEditing(false);
+    setFolderSyncDraft((f?.syncPaths ?? []).join("\n"));
+  }, [nav, folders]);
 
   // 拖拽:被拖动的条目 id;当前悬停的放置目标(文件夹 id)。
   const [dragId, setDragId] = useState<string | null>(null);
@@ -1063,10 +1074,6 @@ export function VaultPanel({
     }
   }
 
-  function startRename(f: FolderMeta) {
-    setRenamingId(f.id);
-    setRenameValue(f.name);
-  }
   async function commitRename() {
     const id = renamingId;
     if (!id) return;
@@ -1080,17 +1087,13 @@ export function VaultPanel({
     await runFolderOp(() => vaultRef.current!.deleteFolder(f.id));
   }
 
-  // 文件夹同步设置:打开弹窗(回填当前清单)/ 保存(写 folder.syncPaths)。
-  function openSyncSettings(f: FolderMeta) {
-    setSyncFolder(f);
-    setSyncText((f.syncPaths ?? []).join("\n"));
+  // 保存文件夹同步清单(在文件夹详情页内联编辑)。
+  async function saveFolderSync(id: string, paths: string[]) {
+    await runFolderOp(() => vaultRef.current!.setFolderSync(id, paths));
   }
-  async function saveSyncSettings() {
-    const f = syncFolder;
-    if (!f) return;
-    const lines = syncText.split(/\r?\n/);
-    setSyncFolder(null);
-    await runFolderOp(() => vaultRef.current!.setFolderSync(f.id, lines));
+  // 重命名文件夹(在文件夹详情页内联编辑标题)。
+  async function saveFolderRename(id: string, name: string) {
+    await runFolderOp(() => vaultRef.current!.renameFolder(id, name));
   }
 
   // 锁定:清内存密钥 + 清工作台状态 + 清所有 secret state,回到选择/解锁界面。
@@ -1665,6 +1668,8 @@ export function VaultPanel({
 
   // ============================ 工作台:两栏(目录树 + 详情) ============================
   const selected = entries.find((e) => e.id === selectedId) ?? null;
+  // 当前导航所在的文件夹(用于右侧文件夹详情页);被删/不在文件夹视图则为 null。
+  const navFolder = nav.kind === "folder" ? (folders.find((f) => f.id === nav.id) ?? null) : null;
   const searching = query.trim().length > 0;
 
   // 当前排序的条目比较器(铺平列表与目录内条目共用)。
@@ -1864,6 +1869,7 @@ export function VaultPanel({
             <button
               type="button"
               onClick={() => {
+                setSelectedId(null); // 取消条目选中 → 右侧显示文件夹详情页
                 setNav({ kind: "folder", id: f.id });
                 if (hasKids && !open) toggleExpand(f.id);
               }}
@@ -1900,18 +1906,14 @@ export function VaultPanel({
                   <FolderPlus className="h-4 w-4" />
                   {t("add_subfolder")}
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => startRename(f)}>
-                  <Pencil className="h-4 w-4" />
-                  {t("rename")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => openSyncSettings(f)}>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setSelectedId(null);
+                    setNav({ kind: "folder", id: f.id });
+                  }}
+                >
                   <RefreshCw className="h-4 w-4" />
                   {t("folder_sync_action")}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem destructive onSelect={() => removeFolder(f)}>
-                  <Trash2 className="h-4 w-4" />
-                  {t("delete")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -2087,29 +2089,6 @@ export function VaultPanel({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* 文件夹同步设置:编辑该文件夹的 syncPaths(给 ark save/ark get 用) */}
-      <AlertDialog open={syncFolder !== null} onOpenChange={(o) => !o && setSyncFolder(null)}>
-        <AlertDialogContent {...testId("vault-folder-sync-dialog")}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("folder_sync_title", syncFolder?.name ?? "")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("folder_sync_desc")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <Textarea
-            {...testId("vault-folder-sync-input")}
-            value={syncText}
-            onChange={(e) => setSyncText(e.target.value)}
-            placeholder={t("folder_sync_ph")}
-            rows={7}
-            className="font-mono text-xs"
-          />
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("btn_cancel")}</AlertDialogCancel>
-            <AlertDialogAction onClick={saveSyncSettings} disabled={busy}>
-              {t("btn_save")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       {/* 导航:文件夹 + 条目 合并的目录树 */}
       <aside {...testId("vault-nav")} className="relative flex flex-col border-r border-[var(--color-border)] bg-[var(--color-surface-2)]">
         <div {...testId("vault-nav-header")} className="flex h-14 items-center justify-between gap-2 border-b border-[var(--color-border)] px-4">
@@ -2646,6 +2625,167 @@ export function VaultPanel({
                     title={selected.title || "item.txt"}
                   />
                 ) : null}
+              </div>
+            </div>
+          ) : navFolder ? (
+            // ---- 文件夹详情页:像条目一样在右侧展示,含统计 + 同步清单(预览/编辑切换)----
+            <div {...testId("vault-folder-detail")} className="w-full">
+              <div
+                {...testId("vault-folder-detail-header")}
+                className="flex items-center gap-1.5 px-6 py-3 text-xs text-[var(--color-muted-foreground)]"
+              >
+                <Folder className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{folderPathOf(navFolder.id)}</span>
+              </div>
+              <div {...testId("vault-folder-detail-body")} className="mx-auto w-full max-w-[1080px] px-6 py-8">
+                <div className="mb-2 flex items-center gap-4">
+                  <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[calc(var(--radius)+0.25rem)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
+                    <Folder className="h-6 w-6" />
+                  </span>
+                  {folderRenaming ? (
+                    <input
+                      {...testId("vault-folder-name-input")}
+                      autoFocus
+                      value={folderNameDraft}
+                      disabled={busy}
+                      onChange={(e) => setFolderNameDraft(e.target.value)}
+                      onBlur={() => {
+                        const v = folderNameDraft.trim();
+                        setFolderRenaming(false);
+                        if (v && v !== navFolder.name) void saveFolderRename(navFolder.id, v);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                        if (e.key === "Escape") {
+                          setFolderNameDraft(navFolder.name);
+                          setFolderRenaming(false);
+                        }
+                      }}
+                      className="h-10 min-w-0 flex-1 rounded-md border border-[var(--color-input)] bg-[var(--color-surface)] px-2 text-2xl font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                    />
+                  ) : (
+                    <h1 className="min-w-0 flex-1 truncate text-2xl font-semibold tracking-tight">
+                      {navFolder.name || t("new_folder")}
+                    </h1>
+                  )}
+                  <DropdownMenu>
+                    <Tooltip label={t("more_actions")}>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          {...testId("vault-folder-menu")}
+                          type="button"
+                          disabled={busy}
+                          aria-label={t("more_actions")}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                    </Tooltip>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          setFolderNameDraft(navFolder.name);
+                          setFolderRenaming(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        {t("rename")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          setFolderSyncDraft((navFolder.syncPaths ?? []).join("\n"));
+                          setFolderSyncEditing(true);
+                        }}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        {t("folder_sync_action")}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem destructive onSelect={() => removeFolder(navFolder)}>
+                        <Trash2 className="h-4 w-4" />
+                        {t("delete")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <p {...testId("vault-folder-stat")} className="text-xs text-[var(--color-muted-foreground)]">
+                  {t(
+                    "folder_stat",
+                    entries.filter((e) => e.folderId === navFolder.id).length,
+                    folders.filter((f) => f.parentId === navFolder.id).length,
+                  )}
+                  {" · "}
+                  {t(
+                    "folder_created",
+                    new Date(navFolder.createdAt).toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US"),
+                  )}
+                </p>
+
+                <div
+                  {...testId("vault-folder-sync-card")}
+                  className="mt-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3.5 shadow-sm"
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold text-[var(--color-foreground)]">
+                    <RefreshCw className="h-4 w-4 shrink-0 text-[var(--color-primary)]" />
+                    {t("folder_sync_action")}
+                    {navFolder.syncPaths?.length ? (
+                      <span className="rounded-full bg-[var(--color-primary)]/10 px-2 py-0.5 text-xs font-medium text-[var(--color-primary)]">
+                        {t("folder_sync_count", navFolder.syncPaths.length)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1.5 text-xs leading-relaxed text-[var(--color-muted-foreground)]">
+                    {t("folder_sync_desc")}
+                  </p>
+                  {folderSyncEditing ? (
+                    <div className="mt-3">
+                      <Textarea
+                        {...testId("vault-folder-sync-input")}
+                        autoFocus
+                        value={folderSyncDraft}
+                        onChange={(e) => setFolderSyncDraft(e.target.value)}
+                        placeholder={t("folder_sync_ph")}
+                        rows={8}
+                        className="resize-y font-mono text-xs"
+                      />
+                      <div className="mt-3 flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => setFolderSyncEditing(false)}
+                        >
+                          {t("btn_cancel")}
+                        </Button>
+                        <Button
+                          {...testId("vault-folder-sync-save")}
+                          size="sm"
+                          disabled={busy || folderSyncDraft === (navFolder.syncPaths ?? []).join("\n")}
+                          onClick={() => saveFolderSync(navFolder.id, folderSyncDraft.split(/\r?\n/))}
+                        >
+                          {t("btn_save")}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div {...testId("vault-folder-sync-preview")} className="mt-3">
+                      {navFolder.syncPaths?.length ? (
+                        <ul className="divide-y divide-[var(--color-border)] overflow-hidden rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface-2)]">
+                          {navFolder.syncPaths.map((p, i) => (
+                            <li key={i} className="px-3 py-2 font-mono text-xs text-[var(--color-foreground)]">
+                              {p}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="rounded-[var(--radius)] border border-dashed border-[var(--color-border)] px-3 py-4 text-center text-xs text-[var(--color-muted-foreground)]">
+                          {t("folder_sync_empty")}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
