@@ -23,7 +23,7 @@ import {
 import { ERR, OK, bold, cyan, dim, green, red, yellow } from "./colors";
 import { folderPathById, lookupFolderPath, resolveFolderPath } from "./folders";
 import { detectSourceProvider, parseSaveTarget, proposeSaveTarget, targetDisplay } from "./save-target";
-import { askConfirm, askSelect, askText, note, spinner } from "./ui";
+import { askConfirm, askSecretText, askSelect, askText, note, spinner } from "./ui";
 import { fetchVaults, openVault, pickVault } from "./vault-select";
 
 interface Args {
@@ -229,10 +229,9 @@ async function runLocal(srcArg: string, args: Args): Promise<void> {
       "ark local",
     );
     mnemonic = (
-      await askText("Enter the vault's recovery phrase (mnemonic)", {
-        validate: (v) =>
-          validateMnemonic(v.trim().replace(/\s+/g, " ")) ? undefined : "Invalid mnemonic (check the words)",
-      })
+      await askSecretText("Enter the vault's recovery phrase (mnemonic)", (v) =>
+        validateMnemonic(v.trim().replace(/\s+/g, " ")) ? undefined : "Invalid mnemonic (check the words)",
+      )
     )
       .trim()
       .replace(/\s+/g, " ");
@@ -428,9 +427,9 @@ async function main() {
       if (!process.stdin.isTTY) fail("import requires an interactive terminal.");
 
       const raw = (
-        await askText("Enter recovery phrase (mnemonic)", {
-          validate: (v) => (validateMnemonic(v.trim().replace(/\s+/g, " ")) ? undefined : "Invalid mnemonic (check the words)"),
-        })
+        await askSecretText("Enter recovery phrase (mnemonic)", (v) =>
+          validateMnemonic(v.trim().replace(/\s+/g, " ")) ? undefined : "Invalid mnemonic (check the words)",
+        )
       )
         .trim()
         .replace(/\s+/g, " ");

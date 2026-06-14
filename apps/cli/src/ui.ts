@@ -36,8 +36,16 @@ export async function askText(
   return run(input({ message: msg, validate: toValidate(opts.validate) }));
 }
 
-/** 密码输入(掩码)。 */
+/** 密码输入(完全隐藏,不回显任何字符)。 */
 export async function askPassword(
+  message: string,
+  validate?: (v: string) => string | undefined,
+): Promise<string> {
+  return run(password({ message, mask: false, validate: toValidate(validate) }));
+}
+
+/** 助记词等敏感文本输入(以 `*` 掩码回显)。 */
+export async function askSecretText(
   message: string,
   validate?: (v: string) => string | undefined,
 ): Promise<string> {

@@ -32,10 +32,10 @@ if [[ "$(node -p "require('$PKG_JSON').private === true")" == "true" ]]; then
   fail "apps/cli/package.json has \"private\": true — set it to false (or remove it) before publishing"
 fi
 
-if ! git diff --quiet HEAD -- . 2>/dev/null; then
-  warn "Working directory has uncommitted changes"
-  read -rp "Continue anyway? (y/N) " answer
-  [[ "$answer" =~ ^[Yy]$ ]] || { info "Cancelled"; exit 0; }
+if [[ -n "$(git status --porcelain)" ]]; then
+  warn "Working directory is not clean:"
+  git status --short
+  fail "Commit or stash all changes before publishing"
 fi
 
 # ─── Determine new version ────────────────────────────────────────────────────
