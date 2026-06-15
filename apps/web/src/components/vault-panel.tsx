@@ -2567,17 +2567,16 @@ export function VaultPanel({
                       </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-3">
-                      {selected.kind !== "file" ? (
-                        <button
-                          type="button"
-                          {...testId("vault-item-cli-access")}
-                          onClick={() => setShowCliHowto(true)}
-                          className="inline-flex shrink-0 items-center gap-1 text-[var(--color-primary)] hover:underline"
-                        >
-                          <Terminal className="h-3 w-3" />
-                          {t("cli_access")}
-                        </button>
-                      ) : null}
+                      {/* 文本与二进制(文件)条目都支持:CLI 的 ark get 现在能写回原始字节。 */}
+                      <button
+                        type="button"
+                        {...testId("vault-item-cli-access")}
+                        onClick={() => setShowCliHowto(true)}
+                        className="inline-flex shrink-0 items-center gap-1 text-[var(--color-primary)] hover:underline"
+                      >
+                        <Terminal className="h-3 w-3" />
+                        {t("cli_access")}
+                      </button>
                       {selectedVault && netdiskUrl(itemRelPath(selectedVault.dir, selected.id, selected.updatedAt)) ? (
                         <a
                           href={netdiskUrl(itemRelPath(selectedVault.dir, selected.id, selected.updatedAt))!}
@@ -2600,7 +2599,8 @@ export function VaultPanel({
                     open={showCliHowto}
                     onOpenChange={setShowCliHowto}
                     itemPath={cliPathOf(selected)}
-                    title={selected.title || "item.txt"}
+                    // 文件条目用原始文件名作为本地输出名(保留扩展名);文本条目用标题。
+                    title={(selected.kind === "file" ? selected.filename : null) || selected.title || "item.txt"}
                   />
                 ) : null}
               </div>
