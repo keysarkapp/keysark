@@ -5,7 +5,7 @@
 //   - 其它/工具缺失:无可用 keystore → 上层各自降级(禁缓存 / 退回仅缓存比较)。
 // 用途:① device key(解锁缓存的对称密钥);② 每库已接受的最新 index rev(回滚锚点)。
 // 零原生依赖:只 shell out 到各 OS 自带 CLI。后端值统一为字符串。
-import { execFileSync } from "node:child_process";
+import { spawnSync, type SpawnSyncOptionsWithBufferEncoding } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -29,23 +29,31 @@ interface Backend {
 }
 
 /** execFileSync 包装:ENOENT(工具缺失)→ KeystoreUnavailable;其它非零退出 → 原样抛。
- *  silent=true:连 stdout 也丢弃(写入类命令不读输出),彻底挡住 `security` 的
- *  "password data for new item" 交互提示等冒到终端。 */
+ *  silent=true:丢弃 stdout(写入类命令不读输出)。
+ *  detached=true:让子进程自成一个会话(setsid),不再持有控制终端 —— `security` 的
+ *  "password data for new item" / "retype" 提示是直接写 /dev/tty 的(绕开 stdout/stderr),
+ *  没有控制终端就开不了 /dev/tty,提示便不再冒到终端;值仍从 stdin 管道读入,不受影响。 */
 function run(
   cmd: string,
   args: string[],
-  opts: { input?: Buffer; env?: NodeJS.ProcessEnv; silent?: boolean } = {},
+  opts: { input?: Buffer; env?: NodeJS.ProcessEnv; silent?: boolean; detached?: boolean } = {},
 ): Buffer {
-  try {
-    return execFileSync(cmd, args, {
-      input: opts.input,
-      env: opts.env ?? process.env,
-      stdio: ["pipe", opts.silent ? "ignore" : "pipe", "ignore"],
-    });
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") throw new KeystoreUnavailable(cmd);
-    throw e;
+  // detached 在运行期由 libuv 实现(setsid),但当前 @types/node 的 SpawnSyncOptions 未声明该字段,
+  // 故连同 encoding:"buffer"(锁定返回 Buffer 的重载)一起断言类型。
+  const res = spawnSync(cmd, args, {
+    input: opts.input,
+    env: opts.env ?? process.env,
+    stdio: ["pipe", opts.silent ? "ignore" : "pipe", "ignore"],
+    encoding: "buffer",
+    detached: opts.detached,
+  } as SpawnSyncOptionsWithBufferEncoding & { detached?: boolean });
+  if (res.error) {
+    if ((res.error as NodeJS.ErrnoException).code === "ENOENT") throw new KeystoreUnavailable(cmd);
+    throw res.error;
   }
+  // 非零退出比照 execFileSync 抛错(get/delete 的调用方据此判定「未命中」等)。
+  if (res.status !== 0) throw new Error(`${cmd} exited with status ${res.status ?? "unknown"}`);
+  return res.stdout ?? Buffer.alloc(0); // silent(stdout=ignore)时 stdout 为 null
 }
 
 // ---------- macOS 登录钥匙串 ----------
@@ -68,7 +76,8 @@ function macKeychain(account: string): Backend {
       // 值不含换行(base64 / 十进制),故 "v\nv\n" 解析无歧义。
       run("security", ["add-generic-password", "-U", "-s", SERVICE, "-a", account, "-w"], {
         input: Buffer.from(`${value}\n${value}\n`, "utf8"),
-        silent: true, // 丢弃 security 的交互提示输出,不冒到终端
+        silent: true, // 丢弃 stdout
+        detached: true, // 脱离控制终端 → security 无法写 /dev/tty,提示不再冒到终端
       });
       // security 即便「两次不一致」也返回 0(什么都没存),故写后回读校验。
       if (self.get() !== value) throw new KeystoreUnavailable("keychain write unverified");
