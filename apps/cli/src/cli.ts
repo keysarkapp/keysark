@@ -197,6 +197,147 @@ function entryAt(vault: Vault, folderId: string | null | undefined, title: strin
   return vault.entries.find((e) => e.folderId === folderId && e.title === title);
 }
 
+// ── 双向同步(ark sync) ───────────────────────────────────────────────────────
+// 把某个 vault 文件夹与本地目录按「修改时间」双向同步:逐个比内容,内容不同则较新的一方
+// 覆盖较旧的一方(本地新→推上去,线上新→拉下来)。条目标题即仓库内相对路径,保持原样。
+// 文件集合 = 该文件夹的直接条目(只处理文本条目);执行前展示方向并请用户确认。
+
+/** 一行同步计划:push=本地→vault,pull=vault→本地,same=已一致,skip=跳过(二进制等)。 */
+type SyncRow = {
+  rel: string;
+  action: "push" | "pull" | "same" | "skip";
+  entry?: EntryMeta;
+  localContent?: string; // push 时已读好的本地明文
+  note?: string;
+};
+
+/** `ark sync [folder]`:vault 文件夹 ↔ 本地目录,按 mtime 双向同步(保持相对路径)。 */
+async function runSync(args: Args): Promise<void> {
+  const explicit = args.positionals[0];
+  const git = gitContext(process.cwd());
+  // vault 侧目录:显式参数优先;否则用当前仓库的 git origin。
+  const vaultPath = explicit ?? git?.originPath;
+  if (!vaultPath) {
+    fail(
+      "Specify a folder to sync: `ark sync <folder>` (e.g. github.com/me/repo),\n" +
+        "or run inside a git repo whose origin selects the matching vault folder.",
+    );
+  }
+  // 本地侧根:git 仓库用仓库根,否则用当前目录。所有相对路径都相对它。
+  const localBase = git?.repoRoot ?? process.cwd();
+
+  // sync 会把线上明文写回本地:敏感读取,强制密码,整批只解锁一次。
+  const { vault } = await ready(args, true, true);
+
+  const folderId = lookupFolderPath(vault, vaultPath!);
+  if (folderId === undefined) {
+    fail(`No vault folder matches "${vaultPath}" — create it on the web (or via \`ark save\`) first.`);
+  }
+  const entries = vault.entries.filter((e) => e.folderId === folderId);
+
+  note(
+    `${dim("vault folder")}  ${bold(vaultPath!)}\n` +
+      `${dim("local dir")}     ${bold(localBase)}\n` +
+      `${dim("files")}         ${entries.length}`,
+    "ark sync",
+  );
+  if (entries.length === 0) {
+    console.log(dim("Folder has no items to sync."));
+    return;
+  }
+
+  // 逐项定状态:内容相同→same;本地缺失→pull;两边都有且不同→按 mtime 定方向。
+  const rows: SyncRow[] = [];
+  for (const e of entries) {
+    const rel = e.title;
+    if (e.kind === "file") {
+      rows.push({ rel, action: "skip", entry: e, note: "binary entry" });
+      continue;
+    }
+    const abs = join(localBase, rel);
+    if (!existsSync(abs) || !statSync(abs).isFile()) {
+      rows.push({ rel, action: "pull", entry: e, note: "missing locally" });
+      continue;
+    }
+    const bytes = readFileSync(abs);
+    if (bytes.includes(0)) {
+      rows.push({ rel, action: "skip", entry: e, note: "local file is binary" });
+      continue;
+    }
+    const localContent = bytes.toString("utf8");
+    // 优先用 index 里的 contentHash 判等,避免对未改动文件做无谓解密。
+    const identical = e.contentHash
+      ? e.contentHash === (await sha256Hex(new TextEncoder().encode(localContent)))
+      : (await vault.open(e.id)).content === localContent;
+    if (identical) {
+      rows.push({ rel, action: "same", entry: e });
+      continue;
+    }
+    if (statSync(abs).mtimeMs > e.updatedAt) rows.push({ rel, action: "push", entry: e, localContent });
+    else rows.push({ rel, action: "pull", entry: e });
+  }
+
+  // 展示清单 + 方向(↑ 本地→vault,↓ vault→本地)。
+  rows.sort((a, b) => a.rel.localeCompare(b.rel));
+  for (const r of rows) {
+    if (r.action === "push") {
+      console.log(`  ${green("↑")} ${r.rel}  ${dim("local")} ${green("→")} ${dim("vault")}`);
+    } else if (r.action === "pull") {
+      console.log(`  ${cyan("↓")} ${r.rel}  ${dim("vault")} ${cyan("→")} ${dim("local")}${r.note ? dim(`  (${r.note})`) : ""}`);
+    } else if (r.action === "skip") {
+      console.log(`  ${yellow("•")} ${dim(r.rel)} ${dim(`(${r.note ?? "skipped"})`)}`);
+    } else {
+      console.log(`  ${dim("=")} ${dim(`${r.rel}  (in sync)`)}`);
+    }
+  }
+
+  const actionable = rows.filter((r) => r.action === "push" || r.action === "pull");
+  if (actionable.length === 0) {
+    console.log(green("✓ Already in sync."));
+    return;
+  }
+  const pushes = actionable.filter((r) => r.action === "push").length;
+  const pulls = actionable.filter((r) => r.action === "pull").length;
+
+  // 执行前确认(--yes 跳过;非交互且未给 --yes 则拒绝改动)。
+  const yes = Boolean(args.flags.yes) || Boolean(args.flags.force);
+  if (!yes) {
+    if (!(process.stdin.isTTY && process.stdout.isTTY)) {
+      fail(`${actionable.length} change(s) pending; re-run with --yes to apply (non-interactive).`);
+    }
+    const ok = await askConfirm(`Apply ${actionable.length} change(s)?  ${green(`↑${pushes}`)} ${cyan(`↓${pulls}`)}`, true);
+    if (!ok) {
+      console.log(yellow("Cancelled."));
+      return;
+    }
+  }
+
+  let pushed = 0;
+  let pulled = 0;
+  let failed = 0;
+  for (const r of actionable) {
+    const e = r.entry!;
+    const abs = join(localBase, r.rel);
+    try {
+      if (r.action === "push") {
+        const res = await vault.save({ id: e.id, title: e.title, content: r.localContent!, folderId: e.folderId, provider: e.provider });
+        pushed++;
+        console.log(`  ${green("↑")} ${bold(r.rel)}${res.synced ? "" : red(" (local; sync failed)")}`);
+      } else {
+        const doc = await vault.open(e.id);
+        mkdirSync(dirname(abs), { recursive: true });
+        writeFileSync(abs, doc.content);
+        pulled++;
+        console.log(`  ${cyan("↓")} ${bold(r.rel)} ${dim(`(${Buffer.byteLength(doc.content)} B)`)}`);
+      }
+    } catch (err) {
+      failed++;
+      console.log(`  ${ERR} ${r.rel} ${dim(`(${err instanceof Error ? err.message : err})`)}`);
+    }
+  }
+  console.log(dim(`— ${pushed} pushed · ${pulled} pulled${failed ? ` · ${failed} failed` : ""}`));
+}
+
 /** 文件名安全化:去掉路径分隔符与控制字符,空则回退。 */
 function safeName(name: string, fallback: string): string {
   const s = name.replace(/[\/\\]+/g, "_").replace(/[\x00-\x1f]/g, "").trim();
@@ -361,6 +502,11 @@ Items:
                          Enter to accept, or type a custom target (q cancels).
                          Existing target → new version; identical content → skipped
   ark rm <id>            Delete item
+  ark sync [folder]      Two-way sync a vault folder with a local directory by mtime.
+                         Omit folder inside a git repo (origin selects it). Per file the
+                         newer side wins (↑ local→vault, ↓ vault→local); missing-local
+                         files are pulled. Shows the plan and asks before applying
+                         (--yes to skip the prompt). Relative paths are preserved.
 
 Local (offline; no login):
   ark local <zip|dir> [--out <dir>]   Decrypt a backup downloaded from your netdisk
@@ -832,6 +978,11 @@ async function main() {
       const meta = findEntry(vault, idArg!);
       const res = await vault.remove(meta.id);
       console.log(`${OK} Deleted ${cyan(`[${meta.id.slice(0, 8)}]`)}${res.synced ? dim(", synced") : red(` (local; ${res.syncError})`)}`);
+      return;
+    }
+
+    case "sync": {
+      await runSync(args);
       return;
     }
 
