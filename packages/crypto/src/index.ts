@@ -14,9 +14,13 @@ import { argon2id } from "hash-wasm";
 const VERIFIER_MARKER = "keysark-verify-v1";
 const HKDF_INFO = new TextEncoder().encode("keysark-aes-gcm-v1");
 
-// 把 Uint8Array 拷成独立 ArrayBuffer,规避 WebCrypto 类型对 SharedArrayBuffer 的排斥。
+// 把 Uint8Array 的「逻辑字节」拷成一个独立、恰好等长的普通 ArrayBuffer。
+// 用 set() 而非 u.slice():Node Buffer 覆写了 slice 使其返回共享内存池上的视图(.buffer
+// 会是整个 8KB 池而非这段字节),直接喂给 WebCrypto 会摘错/认证错。也顺带规避 SharedArrayBuffer。
 function toArrayBuffer(u: Uint8Array): ArrayBuffer {
-  return u.slice().buffer as ArrayBuffer;
+  const copy = new Uint8Array(u.byteLength);
+  copy.set(u);
+  return copy.buffer;
 }
 
 function b64encode(u: Uint8Array): string {

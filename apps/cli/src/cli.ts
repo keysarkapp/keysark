@@ -200,14 +200,14 @@ function entryAt(vault: Vault, folderId: string | null | undefined, title: strin
 // ── 双向同步(ark sync) ───────────────────────────────────────────────────────
 // 把某个 vault 文件夹与本地目录按「修改时间」双向同步:逐个比内容,内容不同则较新的一方
 // 覆盖较旧的一方(本地新→推上去,线上新→拉下来)。条目标题即仓库内相对路径,保持原样。
-// 文件集合 = 该文件夹的直接条目(只处理文本条目);执行前展示方向并请用户确认。
+// 文件集合 = 该文件夹的直接条目(文本与二进制文件条目都处理);执行前展示方向并请用户确认。
 
-/** 一行同步计划:push=本地→vault,pull=vault→本地,same=已一致,skip=跳过(二进制等)。 */
+/** 一行同步计划:push=本地→vault,pull=vault→本地,same=已一致,skip=跳过。 */
 type SyncRow = {
   rel: string;
   action: "push" | "pull" | "same" | "skip";
   entry?: EntryMeta;
-  localContent?: string; // push 时已读好的本地明文
+  localBytes?: Buffer; // push 时已读好的本地原始字节(文本/二进制通用)
   note?: string;
 };
 
@@ -247,33 +247,27 @@ async function runSync(args: Args): Promise<void> {
   }
 
   // 逐项定状态:内容相同→same;本地缺失→pull;两边都有且不同→按 mtime 定方向。
+  // contentHash 对文本=sha256(utf8 字节)、对文件=sha256(原始字节),都等于 sha256(本地文件字节),
+  // 故同一个哈希即可判等(文本/二进制通用),也避免对未改动文件做无谓解密。
   const rows: SyncRow[] = [];
   for (const e of entries) {
     const rel = e.title;
-    if (e.kind === "file") {
-      rows.push({ rel, action: "skip", entry: e, note: "binary entry" });
-      continue;
-    }
     const abs = join(localBase, rel);
     if (!existsSync(abs) || !statSync(abs).isFile()) {
       rows.push({ rel, action: "pull", entry: e, note: "missing locally" });
       continue;
     }
-    const bytes = readFileSync(abs);
-    if (bytes.includes(0)) {
-      rows.push({ rel, action: "skip", entry: e, note: "local file is binary" });
-      continue;
-    }
-    const localContent = bytes.toString("utf8");
-    // 优先用 index 里的 contentHash 判等,避免对未改动文件做无谓解密。
+    const localBytes = readFileSync(abs);
     const identical = e.contentHash
-      ? e.contentHash === (await sha256Hex(new TextEncoder().encode(localContent)))
-      : (await vault.open(e.id)).content === localContent;
+      ? e.contentHash === (await sha256Hex(localBytes))
+      : e.kind === "file"
+        ? Buffer.compare(localBytes, Buffer.from(await vault.openFile(e.id))) === 0
+        : (await vault.open(e.id)).content === localBytes.toString("utf8");
     if (identical) {
       rows.push({ rel, action: "same", entry: e });
       continue;
     }
-    if (statSync(abs).mtimeMs > e.updatedAt) rows.push({ rel, action: "push", entry: e, localContent });
+    if (statSync(abs).mtimeMs > e.updatedAt) rows.push({ rel, action: "push", entry: e, localBytes });
     else rows.push({ rel, action: "pull", entry: e });
   }
 
@@ -320,15 +314,26 @@ async function runSync(args: Args): Promise<void> {
     const abs = join(localBase, r.rel);
     try {
       if (r.action === "push") {
-        const res = await vault.save({ id: e.id, title: e.title, content: r.localContent!, folderId: e.folderId, provider: e.provider });
+        // 二进制 → saveFile(保留原 filename/mimeType);文本 → save。
+        const res =
+          e.kind === "file"
+            ? await vault.saveFile({
+                id: e.id,
+                title: e.title,
+                filename: e.filename ?? basename(r.rel),
+                mimeType: e.mimeType ?? guessMime(r.rel),
+                bytes: r.localBytes!,
+                folderId: e.folderId,
+              })
+            : await vault.save({ id: e.id, title: e.title, content: r.localBytes!.toString("utf8"), folderId: e.folderId, provider: e.provider });
         pushed++;
         console.log(`  ${green("↑")} ${bold(r.rel)}${res.synced ? "" : red(" (local; sync failed)")}`);
       } else {
-        const doc = await vault.open(e.id);
+        const payload = e.kind === "file" ? Buffer.from(await vault.openFile(e.id)) : Buffer.from((await vault.open(e.id)).content, "utf8");
         mkdirSync(dirname(abs), { recursive: true });
-        writeFileSync(abs, doc.content);
+        writeFileSync(abs, payload);
         pulled++;
-        console.log(`  ${cyan("↓")} ${bold(r.rel)} ${dim(`(${Buffer.byteLength(doc.content)} B)`)}`);
+        console.log(`  ${cyan("↓")} ${bold(r.rel)} ${dim(`(${payload.byteLength} B)`)}`);
       }
     } catch (err) {
       failed++;
@@ -342,6 +347,25 @@ async function runSync(args: Args): Promise<void> {
 function safeName(name: string, fallback: string): string {
   const s = name.replace(/[\/\\]+/g, "_").replace(/[\x00-\x1f]/g, "").trim();
   return s || fallback;
+}
+
+/** 按扩展名粗猜 MIME(仅文件条目展示/下载用);未知一律 application/octet-stream。 */
+const MIME_BY_EXT: Record<string, string> = {
+  ".txt": "text/plain",
+  ".json": "application/json",
+  ".pem": "application/x-pem-file",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".pdf": "application/pdf",
+  ".zip": "application/zip",
+  ".gz": "application/gzip",
+  ".p12": "application/x-pkcs12",
+  ".pfx": "application/x-pkcs12",
+};
+function guessMime(path: string): string {
+  return MIME_BY_EXT[extname(path).toLowerCase()] ?? "application/octet-stream";
 }
 
 /**
@@ -492,11 +516,13 @@ Items:
                          the local arg. Pipe/redirect still streams to stdout for scripts.
                          With local: write the file — asks before overwriting a
                          different file, skips when identical; a directory keeps
-                         the item's filename
+                         the item's filename. Binary (file) items are written as
+                         raw bytes.
   ark new --title T [--content C] [--folder a/b]   Create item (no --content: reads stdin)
   ark set <id> [--title T] [--content C] [--folder a/b]   Update item
                          --folder is a path; missing levels are created; "/" = root
-  ark save <source> [target]   Upload a text file. target = a/b/title; trailing "/"
+  ark save <source> [target]   Upload a file (text or binary; binary is stored as an
+                         encrypted file item). target = a/b/title; trailing "/"
                          keeps the filename. Without target: detected from git origin
                          (e.g. github.com/me/repo/.env) or root + filename —
                          Enter to accept, or type a custom target (q cancels).
@@ -800,6 +826,9 @@ async function main() {
       }
       if (!meta) meta = await resolveEntryArg(vault, pathArg!);
       const doc = await vault.open(meta.id);
+      // 文件条目:正文是独立 <id>.bin 的原始字节;文本条目:doc.content。统一成可写的 payload。
+      const isFile = meta.kind === "file";
+      const payload: Buffer = isFile ? Buffer.from(await vault.openFile(meta.id)) : Buffer.from(doc.content, "utf8");
 
       // 本地目标:显式 local 优先;否则若路径属于当前仓库且输出到终端,缺省落到仓库内相对路径
       //(管道/重定向时仍走 stdout,脚本不受影响)。
@@ -811,19 +840,21 @@ async function main() {
             : undefined;
 
       if (dest === undefined) {
-        // stdout(管道/重定向,或无法从路径推断本地目标)。TTY 才带标题头。
-        if (process.stdout.isTTY) console.log(`${bold(`# ${doc.title || "(untitled)"}`)}\n`);
-        console.log(doc.content);
+        // stdout(管道/重定向,或无法从路径推断本地目标)。文件条目直接写原始字节(不加标题头,
+        // 免得污染二进制);文本条目 TTY 下带标题头。
+        if (!isFile && process.stdout.isTTY) console.log(`${bold(`# ${doc.title || "(untitled)"}`)}\n`);
+        process.stdout.write(payload);
+        if (!isFile && process.stdout.isTTY) console.log();
         return;
       }
 
-      // 目标是已存在的目录 → 取标题末段做文件名。
+      // 目标是已存在的目录 → 取文件名/标题末段做文件名。
       if (existsSync(dest) && statSync(dest).isDirectory()) {
-        dest = join(dest, basename(doc.title || "item.txt"));
+        dest = join(dest, basename((isFile ? doc.filename ?? meta.filename : doc.title) || "item.txt"));
       }
       if (existsSync(dest)) {
         const local = readFileSync(dest);
-        if (local.toString("utf8") === doc.content) {
+        if (Buffer.compare(local, payload) === 0) {
           console.log(`${OK} ${dest} already up to date.`);
           return;
         }
@@ -841,8 +872,8 @@ async function main() {
         }
       }
       mkdirSync(dirname(dest), { recursive: true });
-      writeFileSync(dest, doc.content);
-      console.log(`${OK} Saved ${bold(dest)} ${dim(`(${Buffer.byteLength(doc.content)} B)`)}`);
+      writeFileSync(dest, payload);
+      console.log(`${OK} Saved ${bold(dest)} ${dim(`(${payload.byteLength} B${isFile ? ", binary" : ""})`)}`);
       return;
     }
 
@@ -871,8 +902,9 @@ async function main() {
       } catch (err) {
         fail(`Cannot read ${abs}: ${err instanceof Error ? err.message : err}`);
       }
-      if (bytes!.includes(0)) fail(`${abs} is binary; only text is supported.`);
-      const content = bytes!.toString("utf8");
+      // 二进制 → 文件条目(vault.saveFile,字节进字节出);文本 → 文本条目。
+      const isBinary = bytes!.includes(0);
+      const content = isBinary ? "" : bytes!.toString("utf8");
 
       // 目标:显式 target 直接解析;省略则自动推导(git origin / 根目录),
       // 并把检测结果给用户过目——回车采用,或当场输入自定义 target。
@@ -926,14 +958,13 @@ async function main() {
           : undefined;
       const display = targetDisplay(target!);
 
-      // 与线上最新版本一致 → 提示并跳过(不写新版本)。
-      if (
-        existing?.contentHash &&
-        existing.contentHash === (await sha256Hex(new TextEncoder().encode(content)))
-      ) {
+      // 与线上最新版本一致 → 提示并跳过(不写新版本)。contentHash 对文本=sha256(utf8 字节),
+      // 对文件=sha256(原始字节);两者都等于 sha256(本地文件字节),故同一个哈希即可比对。
+      const newHash = await sha256Hex(isBinary ? bytes! : new TextEncoder().encode(content));
+      if (existing?.contentHash && existing.contentHash === newHash) {
         console.log(`${OK} Up to date with the latest version (${existing.versions ?? 1} total); nothing to save.`);
-        if (provider && provider !== existing.provider) {
-          // 内容不动,仅补来源标记(元数据更新,不产生新版本)。
+        if (!isBinary && provider && provider !== existing.provider) {
+          // 内容不动,仅补来源标记(元数据更新,不产生新版本);仅文本条目带 provider。
           const res = await vault.save({ id: existing.id, title, content, folderId: existing.folderId, provider });
           console.log(`  Provider tag set ${yellow(`(${provider})`)}${res.synced ? dim(", synced") : red(` (local; sync failed: ${res.syncError})`)}`);
         }
@@ -947,9 +978,16 @@ async function main() {
       }
 
       const folderId = folderPath !== undefined ? await resolveFolderPath(vault, folderPath) : null;
-      const res = await vault.save({ id: existing?.id, title, content, folderId, provider });
+      const res = isBinary
+        ? await vault.saveFile({ id: existing?.id, title, filename: basename(abs), mimeType: guessMime(abs), bytes: bytes!, folderId })
+        : await vault.save({ id: existing?.id, title, content, folderId, provider });
+      const tag = isBinary
+        ? dim(` (binary, ${res.entries.find((e) => e.id === res.id)?.fileSize ?? bytes!.byteLength} B)`)
+        : provider
+          ? yellow(` (${provider})`)
+          : "";
       console.log(
-        `${OK} ${existing ? "Updated" : "Created"} ${bold(display)} ${cyan(`[${res.id.slice(0, 8)}]`)}${provider ? yellow(` (${provider})`) : ""}${res.synced ? dim(", synced") : red(` (local; sync failed: ${res.syncError})`)}`,
+        `${OK} ${existing ? "Updated" : "Created"} ${bold(display)} ${cyan(`[${res.id.slice(0, 8)}]`)}${tag}${res.synced ? dim(", synced") : red(` (local; sync failed: ${res.syncError})`)}`,
       );
       return;
     }
