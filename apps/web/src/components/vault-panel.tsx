@@ -291,6 +291,8 @@ export function VaultPanel({
   const [mode, setMode] = useState<"preview" | "edit">("preview");
   const [showHistory, setShowHistory] = useState(false); // 历史版本面板(冷路径,点开才拉)
   const [deleteTarget, setDeleteTarget] = useState<EntryMeta | null>(null); // 待确认删除的条目(打开 AlertDialog)
+  const [deleteFolderTarget, setDeleteFolderTarget] = useState<FolderMeta | null>(null); // 待确认删除的文件夹
+  const [deleteConfirm, setDeleteConfirm] = useState(""); // 删除二次确认:需手动输入 "delete"
   // 编辑态的所属文件夹
   const [editFolderId, setEditFolderId] = useState<string | null>(null);
 
@@ -1071,9 +1073,17 @@ export function VaultPanel({
     setRenamingId(null);
     if (name) await runFolderOp(() => vaultRef.current!.renameFolder(id, name));
   }
-  async function removeFolder(f: FolderMeta) {
-    if (!window.confirm(t("confirm_delete_folder", f.name || t("new_folder")))) return;
+  // 打开文件夹删除确认弹窗(需手动输入 "delete" 才能确认)。
+  function removeFolder(f: FolderMeta) {
+    setDeleteConfirm("");
+    setDeleteFolderTarget(f);
+  }
+  // 确认删除文件夹:仅在输入框已填入 "delete" 时由弹窗调用。
+  async function confirmRemoveFolder() {
+    const f = deleteFolderTarget;
+    if (!f) return;
     if (nav.kind === "folder" && nav.id === f.id) setNav({ kind: "all" });
+    setDeleteFolderTarget(null);
     await runFolderOp(() => vaultRef.current!.deleteFolder(f.id));
   }
 
@@ -1931,6 +1941,51 @@ export function VaultPanel({
       className="grid h-screen overflow-hidden"
       style={{ gridTemplateColumns: `${navWidth}px 1fr` }}
     >
+      {/* 文件夹删除确认弹窗:需手动输入 "delete" 才能确认(内容会移到上级目录) */}
+      <AlertDialog
+        open={deleteFolderTarget != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteFolderTarget(null);
+            setDeleteConfirm("");
+          }
+        }}
+      >
+        <AlertDialogContent {...testId("vault-folder-delete-dialog")}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("delete_folder_title")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("confirm_delete_folder", deleteFolderTarget?.name || t("new_folder"))}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <p className="text-sm text-[var(--color-muted-foreground)]">{t("delete_confirm_hint")}</p>
+            <Input
+              {...testId("vault-folder-delete-input")}
+              autoFocus
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              placeholder={t("delete_confirm_placeholder")}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>{t("btn_cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              {...testId("vault-folder-delete-confirm")}
+              variant="danger"
+              disabled={busy || deleteConfirm.trim().toLowerCase() !== "delete"}
+              onClick={() => {
+                void confirmRemoveFolder();
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+              {t("delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {/* 隐藏文件选择框:上传文件条目时由 pickFile() 触发 */}
       <input
         ref={fileInputRef}
@@ -2412,7 +2467,13 @@ export function VaultPanel({
                         </DropdownMenuTrigger>
                       </Tooltip>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem destructive onSelect={() => setDeleteTarget(selected)}>
+                        <DropdownMenuItem
+                          destructive
+                          onSelect={() => {
+                            setDeleteConfirm("");
+                            setDeleteTarget(selected);
+                          }}
+                        >
                           <Trash2 className="h-4 w-4" />
                           {t("delete")}
                         </DropdownMenuItem>
@@ -2425,7 +2486,10 @@ export function VaultPanel({
               <AlertDialog
                 open={deleteTarget != null}
                 onOpenChange={(open) => {
-                  if (!open) setDeleteTarget(null);
+                  if (!open) {
+                    setDeleteTarget(null);
+                    setDeleteConfirm("");
+                  }
                 }}
               >
                 <AlertDialogContent {...testId("vault-item-delete-dialog")}>
@@ -2435,12 +2499,24 @@ export function VaultPanel({
                       {t("confirm_delete_item", deleteTarget?.title || t("untitled"))}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
+                  <div className="space-y-1.5">
+                    <p className="text-sm text-[var(--color-muted-foreground)]">{t("delete_confirm_hint")}</p>
+                    <Input
+                      {...testId("vault-item-delete-input")}
+                      autoFocus
+                      value={deleteConfirm}
+                      onChange={(e) => setDeleteConfirm(e.target.value)}
+                      placeholder={t("delete_confirm_placeholder")}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
                   <AlertDialogFooter>
                     <AlertDialogCancel disabled={busy}>{t("btn_cancel")}</AlertDialogCancel>
                     <AlertDialogAction
                       {...testId("vault-item-delete-confirm")}
                       variant="danger"
-                      disabled={busy}
+                      disabled={busy || deleteConfirm.trim().toLowerCase() !== "delete"}
                       onClick={() => {
                         if (deleteTarget) removeEntry(deleteTarget);
                       }}

@@ -321,11 +321,14 @@ const zh = {
   folder_name_ph: "文件夹名称",
   rename: "重命名",
   delete: "删除",
+  delete_folder_title: "删除文件夹",
   confirm_delete_folder: (name: string) =>
     `删除文件夹「${name}」?其中的条目与子文件夹会移动到上级目录。`,
   delete_item_title: "删除条目",
   confirm_delete_item: (name: string) =>
     `删除条目「${name}」?此操作不可撤销,删除后无法找回(含全部历史版本)。`,
+  delete_confirm_hint: "请输入 delete 以确认此操作。",
+  delete_confirm_placeholder: "delete",
   btn_lock: "锁定保险库",
   search_placeholder: "搜索条目…",
   empty_vault: "保险库还是空的,点「+ 新建」开始。",
@@ -723,11 +726,14 @@ const en: typeof zh = {
   folder_name_ph: "Folder name",
   rename: "Rename",
   delete: "Delete",
+  delete_folder_title: "Delete folder",
   confirm_delete_folder: (name: string) =>
     `Delete folder "${name}"? Its items and subfolders will move to the parent.`,
   delete_item_title: "Delete item",
   confirm_delete_item: (name: string) =>
     `Delete item "${name}"? This cannot be undone — it is gone for good, including all version history.`,
+  delete_confirm_hint: "Type delete to confirm this action.",
+  delete_confirm_placeholder: "delete",
   btn_lock: "Lock vault",
   search_placeholder: "Search items…",
   empty_vault: "Your vault is empty — hit “+ New” to start.",
